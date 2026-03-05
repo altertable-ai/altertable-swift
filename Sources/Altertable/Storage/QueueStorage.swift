@@ -7,8 +7,10 @@ import Foundation
 
 class QueueStorage {
     private let fileURL: URL
+    private let logger: Logger
     
-    init() {
+    init(logger: Logger) {
+        self.logger = logger
         let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
         let directory = paths[0]
         
@@ -25,7 +27,7 @@ class QueueStorage {
             let data = try JSONEncoder().encode(queue)
             try data.write(to: fileURL)
         } catch {
-            print("[Altertable] Failed to save queue: \(error)")
+            logger.error("Failed to save queue", error: error)
         }
     }
     

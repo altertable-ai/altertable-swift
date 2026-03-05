@@ -16,6 +16,7 @@ public class Altertable {
     private let sessionManager: SessionManager
     private let storage: Storage
     private let requester: Requester
+    private let logger: Logger
     
     // Identity state
     private var distinctId: String
@@ -24,7 +25,7 @@ public class Altertable {
     
     // Queue
     private var queue: [QueuedRequest] = []
-    private let queueStorage = QueueStorage()
+    private let queueStorage: QueueStorage
     
     enum QueuedRequest: Codable {
         case track(TrackPayload)
@@ -39,6 +40,8 @@ public class Altertable {
     init(apiKey: String, config: AltertableConfig? = nil, session: URLSession? = nil) {
         let defaultConfig = AltertableConfig(apiKey: apiKey)
         self.config = config ?? defaultConfig
+        self.logger = Logger(isDebug: self.config.debug)
+        self.queueStorage = QueueStorage(logger: self.logger)
         
         let keychain = SecureStorage()
         let defaults = UserDefaultsStorage()
@@ -77,6 +80,17 @@ public class Altertable {
         let timestamp = Date().ISO8601Format()
         let sessionId = sessionManager.getSessionId()
         
+        // Merge system properties
+        var finalProperties = Context.getSystemProperties()
+        
+        // Add release if present
+        if let release = config.release ?? (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) {
+            finalProperties[SDKConstants.propertyRelease] = AnyCodable(release)
+        }
+        
+        // User properties overwrite system ones
+        properties.forEach { finalProperties[$0] = $1 }
+        
         let payload = TrackPayload(
             timestamp: timestamp,
             event: event,
@@ -85,13 +99,29 @@ public class Altertable {
             distinctId: distinctId,
             anonymousId: anonymousId,
             sessionId: sessionId,
-            properties: properties
+            properties: finalProperties
         )
         
         enqueue(.track(payload))
     }
     
     public func identify(userId: String, traits: [String: AnyCodable] = [:]) {
+        do {
+            try Validator.validateUserId(userId)
+        } catch {
+            logger.error(error.localizedDescription)
+            return
+        }
+        
+        // JS SDK Logic:
+        // if (isIdentified() && userId !== getDistinctId()) { warn + reset }
+        let isIdentified = anonymousId != nil // If anonymousId is set, we have identified previously
+        
+        if isIdentified && distinctId != userId {
+            logger.warn("User \"\(userId)\" is already identified as \"\(distinctId)\". The session has been automatically reset. Use alias() to link the new ID to the existing one if intentional.")
+            reset()
+        }
+        
         if distinctId != userId {
             anonymousId = distinctId
             distinctId = userId
@@ -111,6 +141,13 @@ public class Altertable {
     }
     
     public func alias(newUserId: String) {
+        do {
+            try Validator.validateUserId(newUserId)
+        } catch {
+            logger.error(error.localizedDescription)
+            return
+        }
+        
         let payload = AliasPayload(
             environment: config.environment,
             deviceId: deviceId,
@@ -122,7 +159,25 @@ public class Altertable {
         enqueue(.alias(payload))
     }
     
-    public func reset(resetDeviceId: Bool = false) {
+    public func updateTraits(_ traits: [String: AnyCodable]) {
+        if anonymousId == nil {
+            logger.warn("User must be identified with identify() before updating traits.")
+            return
+        }
+        
+        // updateTraits is sent as an identify call with current IDs
+        let payload = IdentifyPayload(
+            environment: config.environment,
+            deviceId: deviceId,
+            distinctId: distinctId,
+            anonymousId: anonymousId,
+            traits: traits
+        )
+        
+        enqueue(.identify(payload))
+    }
+    
+    public func reset(resetDeviceId: Bool = false, resetTrackingConsent: Bool = false) {
         sessionManager.renewSession()
         let newDistinct = SDKConstants.prefixAnonymousId + "-" + UUID().uuidString
         self.distinctId = newDistinct
