@@ -7,6 +7,9 @@ import Foundation
 #if canImport(UIKit)
 import UIKit
 #endif
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public class Altertable {
     private var config: AltertableConfig
@@ -22,7 +25,11 @@ public class Altertable {
     // Queue
     private var queue: [TrackPayload] = []
     
-    public init(apiKey: String, config: AltertableConfig? = nil) {
+    public convenience init(apiKey: String, config: AltertableConfig? = nil) {
+        self.init(apiKey: apiKey, config: config, session: nil)
+    }
+    
+    init(apiKey: String, config: AltertableConfig? = nil, session: URLSession? = nil) {
         let defaultConfig = AltertableConfig(apiKey: apiKey)
         self.config = config ?? defaultConfig
         
@@ -31,7 +38,7 @@ public class Altertable {
         self.storage = FallbackStorage(primary: keychain, fallback: defaults)
         
         self.sessionManager = SessionManager(storage: self.storage)
-        self.requester = Requester(config: self.config)
+        self.requester = Requester(config: self.config, session: session)
         
         // Load identity from storage or generate new
         if let storedDevice = storage.string(forKey: "atbl.device_id") {

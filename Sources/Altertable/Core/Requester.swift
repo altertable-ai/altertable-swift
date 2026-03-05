@@ -19,13 +19,17 @@ class Requester {
     private let config: AltertableConfig
     private let session: URLSession
     
-    init(config: AltertableConfig) {
+    init(config: AltertableConfig, session: URLSession? = nil) {
         self.config = config
         
-        let sessionConfig = URLSessionConfiguration.default
-        sessionConfig.timeoutIntervalForRequest = config.requestTimeout
-        sessionConfig.timeoutIntervalForResource = config.requestTimeout
-        self.session = URLSession(configuration: sessionConfig)
+        if let session = session {
+            self.session = session
+        } else {
+            let sessionConfig = URLSessionConfiguration.default
+            sessionConfig.timeoutIntervalForRequest = config.requestTimeout
+            sessionConfig.timeoutIntervalForResource = config.requestTimeout
+            self.session = URLSession(configuration: sessionConfig)
+        }
     }
     
     func send(_ payload: TrackPayload, completion: @escaping (Result<Void, Error>) -> Void) {
