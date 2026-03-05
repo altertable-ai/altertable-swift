@@ -33,15 +33,22 @@ class Requester {
     }
     
     func send(_ payload: TrackPayload, completion: @escaping (Result<Void, Error>) -> Void) {
-        let url = URL(string: "\(config.baseURL)/track")!
+        sendRequest(endpoint: "/track", payload: payload, completion: completion)
+    }
+    
+    func send(_ payload: IdentifyPayload, completion: @escaping (Result<Void, Error>) -> Void) {
+        sendRequest(endpoint: "/identify", payload: payload, completion: completion)
+    }
+    
+    func send(_ payload: AliasPayload, completion: @escaping (Result<Void, Error>) -> Void) {
+        sendRequest(endpoint: "/alias", payload: payload, completion: completion)
+    }
+    
+    private func sendRequest<T: Encodable>(endpoint: String, payload: T, completion: @escaping (Result<Void, Error>) -> Void) {
+        let url = URL(string: "\(config.baseURL)\(endpoint)")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // Mobile uses query param for apiKey too, per spec "Web tier ... API key sent as query param"
-        // But spec Phase 11 says "Web tier ... API key sent as query param" and "Server tier ... X-API-Key header"
-        // Mobile tier usually behaves like web in client-side analytics (public key).
-        // Let's use query param matching the web implementation pattern for public keys.
         
         var components = URLComponents(url: url, resolvingAgainstBaseURL: true)!
         components.queryItems = [URLQueryItem(name: "apiKey", value: config.apiKey)]
@@ -49,7 +56,6 @@ class Requester {
         
         do {
             let encoder = JSONEncoder()
-            // Dates are already strings in our payload models (ISO8601)
             request.httpBody = try encoder.encode(payload)
         } catch {
             completion(.failure(error))

@@ -23,7 +23,21 @@ public class Altertable {
     private var deviceId: String
     
     // Queue
-    private var queue: [TrackPayload] = []
+    // We use Any to store different payload types in the queue for now
+    // Ideally we would use an enum or protocol, but JSON serialization of mixed types in a queue array 
+    // is simpler if we treat flush as generic.
+    // However, to keep it strongly typed as per spec "Typed models ... are first-class",
+    // let's define an enum for QueuedItem if we want to mix them.
+    // BUT the spec Phase 8 says "Event Queue ... Buffer as fully-built payloads".
+    // Let's use a wrapper enum.
+    
+    private var queue: [QueuedRequest] = []
+    
+    enum QueuedRequest {
+        case track(TrackPayload)
+        case identify(IdentifyPayload)
+        case alias(AliasPayload)
+    }
     
     public convenience init(apiKey: String, config: AltertableConfig? = nil) {
         self.init(apiKey: apiKey, config: config, session: nil)
@@ -80,7 +94,7 @@ public class Altertable {
         // Add default properties (lib version etc)
         // TODO: Merge lib properties
         
-        queue.append(payload)
+        queue.append(.track(payload))
         flush()
     }
     
@@ -92,11 +106,29 @@ public class Altertable {
             storage.set(anonymousId!, forKey: "atbl.anonymous_id")
         }
         
-        // Send identify event (TODO: IdentifyPayload)
+        let payload = IdentifyPayload(
+            environment: config.environment,
+            deviceId: deviceId,
+            distinctId: distinctId,
+            anonymousId: anonymousId,
+            traits: traits
+        )
+        
+        queue.append(.identify(payload))
+        flush()
     }
     
     public func alias(newUserId: String) {
-        // Send alias event (TODO: AliasPayload)
+        let payload = AliasPayload(
+            environment: config.environment,
+            deviceId: deviceId,
+            distinctId: distinctId,
+            anonymousId: anonymousId,
+            newUserId: newUserId
+        )
+        
+        queue.append(.alias(payload))
+        flush()
     }
     
     public func reset() {
@@ -116,16 +148,25 @@ public class Altertable {
         queue.removeAll() // Clear queue (optimistic)
         
         // For now simple one-by-one send, Phase 11 will optimize
-        for event in batch {
-            requester.send(event) { [weak self] result in
-                switch result {
-                case .success:
-                    break
-                case .failure(let error):
-                    self?.config.onError?(error)
-                    // TODO: Re-queue on recoverable error
-                }
+        for request in batch {
+            switch request {
+            case .track(let payload):
+                requester.send(payload) { [weak self] result in self?.handleResult(result) }
+            case .identify(let payload):
+                requester.send(payload) { [weak self] result in self?.handleResult(result) }
+            case .alias(let payload):
+                requester.send(payload) { [weak self] result in self?.handleResult(result) }
             }
+        }
+    }
+    
+    private func handleResult(_ result: Result<Void, Error>) {
+        switch result {
+        case .success:
+            break
+        case .failure(let error):
+            self.config.onError?(error)
+            // TODO: Re-queue on recoverable error
         }
     }
     

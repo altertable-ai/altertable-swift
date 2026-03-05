@@ -24,7 +24,12 @@ class MockURLProtocol: URLProtocol {
         MockURLProtocol.lastRequest = request
         
         guard let handler = MockURLProtocol.requestHandler else {
-            fatalError("Handler is unavailable.")
+            // If no handler is set, we can't process the request.
+            // In tests, this might happen if a request fires unexpectedly.
+            // Fail the request instead of crashing.
+            let error = NSError(domain: "MockURLProtocol", code: -1, userInfo: [NSLocalizedDescriptionKey: "Handler is unavailable."])
+            client?.urlProtocol(self, didFailWithError: error)
+            return
         }
         
         do {
