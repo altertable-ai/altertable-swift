@@ -6,11 +6,18 @@
 import Foundation
 
 class SessionManager {
+    private let storage: Storage
     private var lastEventTime: Date?
     private var sessionId: String?
     
-    init() {
-        // Load from storage if needed
+    init(storage: Storage) {
+        self.storage = storage
+        self.sessionId = storage.string(forKey: "atbl.session_id")
+        
+        if let lastEvent = storage.string(forKey: "atbl.last_event_at"),
+           let interval = TimeInterval(lastEvent) {
+            self.lastEventTime = Date(timeIntervalSince1970: interval)
+        }
     }
     
     func getSessionId() -> String {
@@ -22,12 +29,21 @@ class SessionManager {
             renewSession()
         }
         
-        lastEventTime = Date()
+        // Update last event time
+        let now = Date()
+        lastEventTime = now
+        storage.set(String(now.timeIntervalSince1970), forKey: "atbl.last_event_at")
+        
         return sessionId!
     }
     
     func renewSession() {
-        sessionId = SDKConstants.prefixSessionId + "-" + UUID().uuidString
-        lastEventTime = Date()
+        let newId = SDKConstants.prefixSessionId + "-" + UUID().uuidString
+        self.sessionId = newId
+        storage.set(newId, forKey: "atbl.session_id")
+        
+        let now = Date()
+        self.lastEventTime = now
+        storage.set(String(now.timeIntervalSince1970), forKey: "atbl.last_event_at")
     }
 }
