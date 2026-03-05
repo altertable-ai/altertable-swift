@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/AltertableTests.build/master.swiftdeps"
+  },
+  "/home/redox/.openclaw/workspace-albert/altertable-swift/Tests/AltertableTests/AltertableTests.swift": {
+    "dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/AltertableTests.build/AltertableTests.d",
+    "object": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/AltertableTests.build/AltertableTests.swift.o",
+    "swiftmodule": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/AltertableTests.build/AltertableTests~partial.swiftmodule",
+    "swift-dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/AltertableTests.build/AltertableTests.swiftdeps",
+    "diagnostics": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/AltertableTests.build/AltertableTests.dia"
+  }
+}

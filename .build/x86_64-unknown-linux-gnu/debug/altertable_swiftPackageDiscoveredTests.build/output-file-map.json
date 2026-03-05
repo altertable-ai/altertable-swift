@@ -1,0 +1,19 @@
+{
+  "": {
+    "swift-dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/altertable_swiftPackageDiscoveredTests.build/master.swiftdeps"
+  },
+  "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/altertable-swiftPackageDiscoveredTests.derived/AltertableTests.swift": {
+    "dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/altertable_swiftPackageDiscoveredTests.build/AltertableTests.d",
+    "object": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/altertable_swiftPackageDiscoveredTests.build/AltertableTests.swift.o",
+    "swiftmodule": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/altertable_swiftPackageDiscoveredTests.build/AltertableTests~partial.swiftmodule",
+    "swift-dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/altertable_swiftPackageDiscoveredTests.build/AltertableTests.swiftdeps",
+    "diagnostics": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/altertable_swiftPackageDiscoveredTests.build/AltertableTests.dia"
+  },
+  "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/altertable-swiftPackageDiscoveredTests.derived/all-discovered-tests.swift": {
+    "dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/altertable_swiftPackageDiscoveredTests.build/all-discovered-tests.d",
+    "object": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/altertable_swiftPackageDiscoveredTests.build/all-discovered-tests.swift.o",
+    "swiftmodule": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/altertable_swiftPackageDiscoveredTests.build/all-discovered-tests~partial.swiftmodule",
+    "swift-dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/altertable_swiftPackageDiscoveredTests.build/all-discovered-tests.swiftdeps",
+    "diagnostics": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/altertable_swiftPackageDiscoveredTests.build/all-discovered-tests.dia"
+  }
+}

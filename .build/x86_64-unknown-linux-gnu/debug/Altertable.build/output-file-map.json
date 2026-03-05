@@ -1,0 +1,61 @@
+{
+  "": {
+    "swift-dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/master.swiftdeps"
+  },
+  "/home/redox/.openclaw/workspace-albert/altertable-swift/Sources/Altertable/Core/Altertable.swift": {
+    "dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Altertable.d",
+    "object": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Altertable.swift.o",
+    "swiftmodule": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Altertable~partial.swiftmodule",
+    "swift-dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Altertable.swiftdeps",
+    "diagnostics": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Altertable.dia"
+  },
+  "/home/redox/.openclaw/workspace-albert/altertable-swift/Sources/Altertable/Core/AltertableConfig.swift": {
+    "dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/AltertableConfig.d",
+    "object": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/AltertableConfig.swift.o",
+    "swiftmodule": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/AltertableConfig~partial.swiftmodule",
+    "swift-dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/AltertableConfig.swiftdeps",
+    "diagnostics": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/AltertableConfig.dia"
+  },
+  "/home/redox/.openclaw/workspace-albert/altertable-swift/Sources/Altertable/Core/Requester.swift": {
+    "dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Requester.d",
+    "object": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Requester.swift.o",
+    "swiftmodule": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Requester~partial.swiftmodule",
+    "swift-dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Requester.swiftdeps",
+    "diagnostics": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Requester.dia"
+  },
+  "/home/redox/.openclaw/workspace-albert/altertable-swift/Sources/Altertable/Core/SDKConstants.swift": {
+    "dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/SDKConstants.d",
+    "object": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/SDKConstants.swift.o",
+    "swiftmodule": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/SDKConstants~partial.swiftmodule",
+    "swift-dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/SDKConstants.swiftdeps",
+    "diagnostics": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/SDKConstants.dia"
+  },
+  "/home/redox/.openclaw/workspace-albert/altertable-swift/Sources/Altertable/Core/SessionManager.swift": {
+    "dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/SessionManager.d",
+    "object": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/SessionManager.swift.o",
+    "swiftmodule": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/SessionManager~partial.swiftmodule",
+    "swift-dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/SessionManager.swiftdeps",
+    "diagnostics": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/SessionManager.dia"
+  },
+  "/home/redox/.openclaw/workspace-albert/altertable-swift/Sources/Altertable/Models/Models.swift": {
+    "dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Models.d",
+    "object": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Models.swift.o",
+    "swiftmodule": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Models~partial.swiftmodule",
+    "swift-dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Models.swiftdeps",
+    "diagnostics": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Models.dia"
+  },
+  "/home/redox/.openclaw/workspace-albert/altertable-swift/Sources/Altertable/Storage/Storage.swift": {
+    "dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Storage.d",
+    "object": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Storage.swift.o",
+    "swiftmodule": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Storage~partial.swiftmodule",
+    "swift-dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Storage.swiftdeps",
+    "diagnostics": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Storage.dia"
+  },
+  "/home/redox/.openclaw/workspace-albert/altertable-swift/Sources/Altertable/Utils/Utils.swift": {
+    "dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Utils.d",
+    "object": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Utils.swift.o",
+    "swiftmodule": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Utils~partial.swiftmodule",
+    "swift-dependencies": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Utils.swiftdeps",
+    "diagnostics": "/home/redox/.openclaw/workspace-albert/altertable-swift/.build/x86_64-unknown-linux-gnu/debug/Altertable.build/Utils.dia"
+  }
+}

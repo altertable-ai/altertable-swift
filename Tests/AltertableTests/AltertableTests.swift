@@ -7,7 +7,8 @@ import XCTest
 @testable import Altertable
 
 final class AltertableTests: XCTestCase {
-    func testExample() throws {
-        XCTAssertEqual(Altertable.hello(), "Hello from Altertable Swift SDK!")
+    func testInitialization() throws {
+        let client = Altertable(apiKey: "pk_test_123")
+        XCTAssertNotNil(client)
     }
 }
