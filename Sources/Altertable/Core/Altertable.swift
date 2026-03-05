@@ -25,7 +25,7 @@ public class Altertable {
     
     // Queue
     private var queue: [QueuedRequest] = []
-    private let queueStorage = QueueStorage()
+    private let queueStorage: QueueStorage
     
     enum QueuedRequest: Codable {
         case track(TrackPayload)
@@ -41,6 +41,7 @@ public class Altertable {
         let defaultConfig = AltertableConfig(apiKey: apiKey)
         self.config = config ?? defaultConfig
         self.logger = Logger(isDebug: self.config.debug)
+        self.queueStorage = QueueStorage(logger: self.logger)
         
         let keychain = SecureStorage()
         let defaults = UserDefaultsStorage()
