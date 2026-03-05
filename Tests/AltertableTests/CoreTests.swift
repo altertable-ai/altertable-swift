@@ -16,6 +16,11 @@ final class CoreTests: XCTestCase {
     override func setUp() {
         super.setUp()
         
+        // Clear queue file before each test
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        let fileURL = paths[0].appendingPathComponent("altertable_queue.json")
+        try? FileManager.default.removeItem(at: fileURL)
+        
         // Setup Mock URL Session
         #if canImport(FoundationNetworking)
         let config = URLSessionConfiguration.default
