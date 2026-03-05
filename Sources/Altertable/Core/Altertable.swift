@@ -71,6 +71,7 @@ public class Altertable {
             storage.set(newDistinct, forKey: "atbl.distinct_id")
         }
         
+        // Don't auto-read anonymousId if it's not set
         self.anonymousId = storage.string(forKey: "atbl.anonymous_id")
         
         setupLifecycleHooks()
@@ -91,11 +92,7 @@ public class Altertable {
             properties: properties
         )
         
-        // Add default properties (lib version etc)
-        // TODO: Merge lib properties
-        
-        queue.append(.track(payload))
-        flush()
+        enqueue(.track(payload))
     }
     
     public func identify(userId: String, traits: [String: AnyCodable] = [:]) {
@@ -114,8 +111,7 @@ public class Altertable {
             traits: traits
         )
         
-        queue.append(.identify(payload))
-        flush()
+        enqueue(.identify(payload))
     }
     
     public func alias(newUserId: String) {
@@ -127,11 +123,10 @@ public class Altertable {
             newUserId: newUserId
         )
         
-        queue.append(.alias(payload))
-        flush()
+        enqueue(.alias(payload))
     }
     
-    public func reset() {
+    public func reset(resetDeviceId: Bool = false) {
         sessionManager.renewSession()
         let newDistinct = SDKConstants.prefixAnonymousId + "-" + UUID().uuidString
         self.distinctId = newDistinct
@@ -139,10 +134,62 @@ public class Altertable {
         
         storage.set(newDistinct, forKey: "atbl.distinct_id")
         storage.removeObject(forKey: "atbl.anonymous_id")
+        
+        if resetDeviceId {
+            let newDevice = SDKConstants.prefixDeviceId + "-" + UUID().uuidString
+            self.deviceId = newDevice
+            storage.set(newDevice, forKey: "atbl.device_id")
+        }
+        
+        // Spec Phase 10: "Clears the event queue."
+        queue.removeAll()
+    }
+    
+    // Internal accessors for testing
+    func getDistinctId() -> String {
+        return distinctId
+    }
+    
+    func getAnonymousId() -> String? {
+        return anonymousId
+    }
+    
+    public func configure(_ newConfig: PartialAltertableConfig) {
+        if let consent = newConfig.trackingConsent {
+            self.config.trackingConsent = consent
+            // TODO: persist consent
+            
+            if consent == .granted {
+                flush()
+            } else if consent == .denied {
+                queue.removeAll()
+            }
+        }
+        // ... apply other config updates if needed
+    }
+    
+    private func enqueue(_ request: QueuedRequest) {
+        if config.trackingConsent == .denied {
+            return
+        }
+        
+        if queue.count >= SDKConstants.maxQueueSize {
+            // Drop oldest
+            queue.removeFirst()
+            // TODO: Log warning
+        }
+        
+        queue.append(request)
+        flush()
     }
     
     public func flush() {
         guard !queue.isEmpty else { return }
+        
+        // Check consent state
+        guard config.trackingConsent == .granted else {
+            return
+        }
         
         let batch = queue // Capture current queue
         queue.removeAll() // Clear queue (optimistic)

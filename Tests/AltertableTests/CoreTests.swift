@@ -162,6 +162,11 @@ final class CoreTests: XCTestCase {
             return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
         }
         
+        // Wait for reset state to propagate if async (it's sync here)
+        // Verify internal state
+        XCTAssertNotEqual(client.getDistinctId(), "user_123")
+        XCTAssertNil(client.getAnonymousId())
+        
         client.track(event: "post_reset")
         waitForExpectations(timeout: 1.0)
     }
@@ -198,5 +203,68 @@ final class CoreTests: XCTestCase {
         }
         client.track(event: "second")
         wait(for: [exp2], timeout: 1.0)
+    }
+    
+    func testConsent() {
+        // Start with pending consent
+        let config = AltertableConfig(apiKey: "pk_test_123", trackingConsent: .pending)
+        client = Altertable(apiKey: "pk_test_123", config: config, session: session)
+        
+        // Track event - should be queued, not sent
+        client.track(event: "pending_event")
+        
+        // No request handler set - if it sends, it will fail/crash.
+        // To verify it DOESN'T send, we set a handler that fails the test.
+        MockURLProtocol.requestHandler = { _ in
+            XCTFail("Should not send queued events")
+            return (HTTPURLResponse(url: URL(string: "http://test")!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
+        }
+        
+        // Wait a bit to ensure no async request happens
+        let waitExp = expectation(description: "Wait")
+        waitExp.isInverted = true
+        wait(for: [waitExp], timeout: 0.1)
+        
+        // Now grant consent
+        let flushExp = expectation(description: "Flush after consent")
+        MockURLProtocol.requestHandler = { request in
+            if let body = request.httpBody,
+               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
+                XCTAssertEqual(json["event"] as? String, "pending_event")
+            }
+            flushExp.fulfill()
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
+        }
+        
+        client.configure(PartialAltertableConfig(trackingConsent: .granted))
+        wait(for: [flushExp], timeout: 1.0)
+    }
+    
+    func testConsentDenied() {
+        // Start with denied consent
+        let config = AltertableConfig(apiKey: "pk_test_123", trackingConsent: .denied)
+        client = Altertable(apiKey: "pk_test_123", config: config, session: session)
+        
+        client.track(event: "denied_event")
+        
+        // Ensure no request
+        MockURLProtocol.requestHandler = { _ in
+            XCTFail("Should not send dropped events")
+            return (HTTPURLResponse(url: URL(string: "http://test")!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
+        }
+        
+        let waitExp = expectation(description: "Wait")
+        waitExp.isInverted = true
+        wait(for: [waitExp], timeout: 0.1)
+        
+        // Grant consent - queue should be empty (dropped)
+        // Handler stays failing
+        
+        client.configure(PartialAltertableConfig(trackingConsent: .granted))
+        
+        // Wait to confirm nothing sends
+        let waitExp2 = expectation(description: "Wait2")
+        waitExp2.isInverted = true
+        wait(for: [waitExp2], timeout: 0.1)
     }
 }
