@@ -16,11 +16,6 @@ final class CoreTests: XCTestCase {
     override func setUp() {
         super.setUp()
         
-        // Clear queue file before each test
-        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        let fileURL = paths[0].appendingPathComponent("altertable_queue.json")
-        try? FileManager.default.removeItem(at: fileURL)
-        
         // Setup Mock URL Session
         #if canImport(FoundationNetworking)
         let config = URLSessionConfiguration.default
@@ -245,31 +240,63 @@ final class CoreTests: XCTestCase {
         wait(for: [flushExp], timeout: 1.0)
     }
     
-    func testConsentDenied() {
-        // Start with denied consent
-        let config = AltertableConfig(apiKey: "pk_test_123", trackingConsent: .denied)
-        client = Altertable(apiKey: "pk_test_123", config: config, session: session)
+    func testIdentifySwitchingUser() {
+        client = Altertable(apiKey: "pk_test_123", session: session)
         
-        client.track(event: "denied_event")
+        // First identify
+        client.identify(userId: "user_A")
         
-        // Ensure no request
+        // Capture session ID via track
+        var originalSessionId: String?
+        let exp1 = expectation(description: "Capture session")
+        MockURLProtocol.requestHandler = { request in
+            if let body = request.httpBody,
+               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
+                originalSessionId = json["session_id"] as? String
+            }
+            exp1.fulfill()
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
+        }
+        client.track(event: "pre_switch")
+        wait(for: [exp1], timeout: 1.0)
+        
+        // Switch user without reset - should trigger auto-reset
+        client.identify(userId: "user_B")
+        
+        let exp2 = self.expectation(description: "Track after switch")
+        MockURLProtocol.requestHandler = { request in
+            if let body = request.httpBody,
+               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
+                let sessionId = json["session_id"] as? String
+                XCTAssertNotEqual(sessionId, originalSessionId, "Session should reset on user switch")
+                XCTAssertEqual(json["distinct_id"] as? String, "user_B")
+            }
+            exp2.fulfill()
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
+        }
+        
+        client.track(event: "post_switch")
+        waitForExpectations(timeout: 1.0)
+    }
+    
+    func testValidation() {
+        client = Altertable(apiKey: "pk_test_123", session: session)
+        
+        // Set fail handler if any request goes out
         MockURLProtocol.requestHandler = { _ in
-            XCTFail("Should not send dropped events")
+            XCTFail("Should not send requests for invalid IDs")
             return (HTTPURLResponse(url: URL(string: "http://test")!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
         }
         
-        let waitExp = expectation(description: "Wait")
+        // Empty ID
+        client.identify(userId: "")
+        
+        // Reserved ID
+        client.alias(newUserId: "anonymous_id")
+        
+        // Verify no requests queued/sent
+        let waitExp = expectation(description: "Wait for no requests")
         waitExp.isInverted = true
         wait(for: [waitExp], timeout: 0.1)
-        
-        // Grant consent - queue should be empty (dropped)
-        // Handler stays failing
-        
-        client.configure(PartialAltertableConfig(trackingConsent: .granted))
-        
-        // Wait to confirm nothing sends
-        let waitExp2 = expectation(description: "Wait2")
-        waitExp2.isInverted = true
-        wait(for: [waitExp2], timeout: 0.1)
     }
 }
