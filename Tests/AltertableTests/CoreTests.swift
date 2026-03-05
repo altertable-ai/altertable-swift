@@ -88,24 +88,53 @@ final class CoreTests: XCTestCase {
     func testIdentify() {
         client = Altertable(apiKey: "pk_test_123", session: session)
         
-        // We verify identify logic. Currently it TODOs the request but updates state.
-        // We check if next track event has correct IDs.
-        
-        client.identify(userId: "user_123")
-        
-        let expectation = self.expectation(description: "Track with new ID")
+        let expectation = self.expectation(description: "Identify Request")
         
         MockURLProtocol.requestHandler = { request in
+            guard let url = request.url else { throw URLError(.badURL) }
+            
+            XCTAssertEqual(url.path, "/identify")
+            XCTAssertEqual(request.httpMethod, "POST")
+            
             if let body = request.httpBody,
                let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
                 XCTAssertEqual(json["distinct_id"] as? String, "user_123")
                 XCTAssertNotNil(json["anonymous_id"], "Should have anonymous_id linked")
+                
+                let traits = json["traits"] as? [String: Any]
+                XCTAssertEqual(traits?["email"] as? String, "user@example.com")
             }
+            
             expectation.fulfill()
-            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
+            return (HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
         }
         
-        client.track(event: "post_identify")
+        client.identify(userId: "user_123", traits: ["email": AnyCodable("user@example.com")])
+        waitForExpectations(timeout: 1.0)
+    }
+    
+    func testAlias() {
+        client = Altertable(apiKey: "pk_test_123", session: session)
+        
+        let expectation = self.expectation(description: "Alias Request")
+        
+        MockURLProtocol.requestHandler = { request in
+            guard let url = request.url else { throw URLError(.badURL) }
+            
+            XCTAssertEqual(url.path, "/alias")
+            XCTAssertEqual(request.httpMethod, "POST")
+            
+            if let body = request.httpBody,
+               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
+                XCTAssertEqual(json["new_user_id"] as? String, "new_user_456")
+                XCTAssertNotNil(json["distinct_id"])
+            }
+            
+            expectation.fulfill()
+            return (HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
+        }
+        
+        client.alias(newUserId: "new_user_456")
         waitForExpectations(timeout: 1.0)
     }
     
