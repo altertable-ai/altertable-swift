@@ -38,3 +38,19 @@ public struct AltertableConfig {
         self.flushOnBackground = flushOnBackground
     }
 }
+
+public struct PartialAltertableConfig {
+    public var trackingConsent: TrackingConsentState?
+    public var debug: Bool?
+    public var environment: String?
+    
+    public init(
+        trackingConsent: TrackingConsentState? = nil,
+        debug: Bool? = nil,
+        environment: String? = nil
+    ) {
+        self.trackingConsent = trackingConsent
+        self.debug = debug
+        self.environment = environment
+    }
+}
