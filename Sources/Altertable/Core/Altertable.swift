@@ -23,17 +23,10 @@ public class Altertable {
     private var deviceId: String
     
     // Queue
-    // We use Any to store different payload types in the queue for now
-    // Ideally we would use an enum or protocol, but JSON serialization of mixed types in a queue array 
-    // is simpler if we treat flush as generic.
-    // However, to keep it strongly typed as per spec "Typed models ... are first-class",
-    // let's define an enum for QueuedItem if we want to mix them.
-    // BUT the spec Phase 8 says "Event Queue ... Buffer as fully-built payloads".
-    // Let's use a wrapper enum.
-    
     private var queue: [QueuedRequest] = []
+    private let queueStorage = QueueStorage()
     
-    enum QueuedRequest {
+    enum QueuedRequest: Codable {
         case track(TrackPayload)
         case identify(IdentifyPayload)
         case alias(AliasPayload)
@@ -73,6 +66,9 @@ public class Altertable {
         
         // Don't auto-read anonymousId if it's not set
         self.anonymousId = storage.string(forKey: "atbl.anonymous_id")
+        
+        // Load queue from disk
+        self.queue = queueStorage.load()
         
         setupLifecycleHooks()
     }
@@ -143,6 +139,7 @@ public class Altertable {
         
         // Spec Phase 10: "Clears the event queue."
         queue.removeAll()
+        queueStorage.save(queue)
     }
     
     // Internal accessors for testing
@@ -180,6 +177,7 @@ public class Altertable {
         }
         
         queue.append(request)
+        queueStorage.save(queue)
         flush()
     }
     
@@ -193,6 +191,7 @@ public class Altertable {
         
         let batch = queue // Capture current queue
         queue.removeAll() // Clear queue (optimistic)
+        queueStorage.save(queue) // Persist cleared state
         
         // For now simple one-by-one send, Phase 11 will optimize
         for request in batch {
