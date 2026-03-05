@@ -10,7 +10,14 @@ class QueueStorage {
     
     init() {
         let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        fileURL = paths[0].appendingPathComponent("altertable_queue.json")
+        let directory = paths[0]
+        
+        // Ensure directory exists (important for Linux/CI where Documents may not exist)
+        if !FileManager.default.fileExists(atPath: directory.path) {
+            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
+        }
+        
+        fileURL = directory.appendingPathComponent("altertable_queue.json")
     }
     
     func save(_ queue: [Altertable.QueuedRequest]) {

@@ -62,17 +62,21 @@ class Requester {
             return
         }
         
-        let task = session.dataTask(with: request) { _, response, error in
+        let finalRequest = request
+        
+        let task = session.dataTask(with: finalRequest) { [weak self] _, response, error in
+            guard let self = self else { return }
+            
             if let error = error {
                 // Retry? For now we just fail, but the Queue in Altertable (Phase 11) says "TODO: Re-queue on recoverable error"
                 // Implementing retry at Requester level is better for transient network errors.
-                self.retry(request: request, attempt: 1, maxAttempts: 3, completion: completion, originalError: error)
+                self.retry(request: finalRequest, attempt: 1, maxAttempts: 3, completion: completion, originalError: error)
                 return
             }
             
             if let httpResponse = response as? HTTPURLResponse {
                 if (500...599).contains(httpResponse.statusCode) || httpResponse.statusCode == 429 {
-                     self.retry(request: request, attempt: 1, maxAttempts: 3, completion: completion, originalError: APIError.httpError(httpResponse.statusCode))
+                     self.retry(request: finalRequest, attempt: 1, maxAttempts: 3, completion: completion, originalError: APIError.httpError(httpResponse.statusCode))
                      return
                 }
                 
@@ -95,8 +99,11 @@ class Requester {
         }
         
         let delay = pow(2.0, Double(attempt)) // Exponential backoff: 2s, 4s, 8s...
-        DispatchQueue.global().asyncAfter(deadline: .now() + delay) {
-            let task = self.session.dataTask(with: request) { _, response, error in
+        DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self = self else { return }
+            let task = self.session.dataTask(with: request) { [weak self] _, response, error in
+                guard let self = self else { return }
+                
                 if let error = error {
                     self.retry(request: request, attempt: attempt + 1, maxAttempts: maxAttempts, completion: completion, originalError: error)
                     return
