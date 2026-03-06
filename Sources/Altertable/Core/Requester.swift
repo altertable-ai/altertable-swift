@@ -83,8 +83,9 @@ class Requester {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.addValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Use X-API-Key as the primary authentication method
+        request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
 
         do {
             let encoder = JSONEncoder()
