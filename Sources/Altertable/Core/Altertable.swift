@@ -81,7 +81,7 @@ public class Altertable {
         } else {
             internalConfig = AltertableConfig()
         }
-        
+
         let ref = Requester.ConfigRef(internalConfig)
         configRef = ref
         logger = Logger(isDebug: internalConfig.debug)
@@ -308,7 +308,10 @@ public class Altertable {
 
             if resetTrackingConsent {
                 config.trackingConsent = SDKConstants.defaultTrackingConsent
-                storage.set(SDKConstants.defaultTrackingConsent.rawValue, forKey: SDKConstants.StorageKeys.trackingConsent)
+                storage.set(
+                    SDKConstants.defaultTrackingConsent.rawValue,
+                    forKey: SDKConstants.StorageKeys.trackingConsent
+                )
             }
         }
     }

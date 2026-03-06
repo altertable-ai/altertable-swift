@@ -331,9 +331,7 @@ final class CoreTests: XCTestCase {
     func testConsentPendingQueuesEvents() {
         let config = AltertableConfig(trackingConsent: .pending)
         client = Altertable(apiKey: "pk_test_123", config: config, session: session)
-
         client.track(event: "pending_event")
-
         MockURLProtocol.requestHandler = { _ in
             XCTFail("Should not send while consent is pending")
             let response = HTTPURLResponse(
@@ -344,11 +342,9 @@ final class CoreTests: XCTestCase {
             )!
             return (response, nil)
         }
-
         let noSendExp = expectation(description: "No request while pending")
         noSendExp.isInverted = true
         wait(for: [noSendExp], timeout: 0.1)
-
         let flushExp = expectation(description: "Flush after consent granted")
         MockURLProtocol.requestHandler = { [self] request in
             if let body = request.httpBody,
@@ -359,7 +355,6 @@ final class CoreTests: XCTestCase {
             flushExp.fulfill()
             return successResponse(url: request.url!)
         }
-
         client.configure(PartialAltertableConfig(trackingConsent: .granted))
         wait(for: [flushExp], timeout: 1.0)
     }
@@ -367,9 +362,7 @@ final class CoreTests: XCTestCase {
     func testConsentDeniedClearsQueue() {
         let config = AltertableConfig(trackingConsent: .pending)
         client = Altertable(apiKey: "pk_test_123", config: config, session: session)
-
         client.track(event: "will_be_dropped")
-
         MockURLProtocol.requestHandler = { _ in
             XCTFail("Should not send after consent denied")
             let response = HTTPURLResponse(
@@ -380,9 +373,7 @@ final class CoreTests: XCTestCase {
             )!
             return (response, nil)
         }
-
         client.configure(PartialAltertableConfig(trackingConsent: .denied))
-
         let noSendExp = expectation(description: "No request after denied")
         noSendExp.isInverted = true
         wait(for: [noSendExp], timeout: 0.2)
@@ -392,7 +383,6 @@ final class CoreTests: XCTestCase {
 
     func testIdentifySwitchingUser() {
         client = Altertable(apiKey: "pk_test_123", session: session)
-
         let expIdentifyA = expectation(description: "Identify user_A")
         MockURLProtocol.requestHandler = { [self] request in
             expIdentifyA.fulfill()
@@ -414,7 +404,6 @@ final class CoreTests: XCTestCase {
         }
         client.track(event: "pre_switch")
         wait(for: [exp1], timeout: 1.0)
-
         // identify(user_B) auto-resets then sends identify + we track — 2 requests
         let exp2 = expectation(description: "Requests after switch")
         exp2.expectedFulfillmentCount = 2
@@ -436,7 +425,6 @@ final class CoreTests: XCTestCase {
             exp2.fulfill()
             return successResponse(url: request.url!)
         }
-
         client.identify(userId: "user_B")
         client.track(event: "post_switch")
         waitForExpectations(timeout: 1.0)
@@ -448,7 +436,6 @@ final class CoreTests: XCTestCase {
     func testConfigureEnvironment() {
         let config = AltertableConfig(environment: "staging")
         client = Altertable(apiKey: "pk_test_123", config: config, session: session)
-
         let exp = expectation(description: "Track in new environment")
         MockURLProtocol.requestHandler = { [self] request in
             if let body = request.httpBody,
@@ -459,7 +446,6 @@ final class CoreTests: XCTestCase {
             exp.fulfill()
             return successResponse(url: request.url!)
         }
-
         client.configure(PartialAltertableConfig(environment: "development"))
         client.track(event: "env_test")
         wait(for: [exp], timeout: 1.0)
@@ -469,40 +455,42 @@ final class CoreTests: XCTestCase {
         // Verify that mutating the original config object after init doesn't bypass SDK side effects
         let originalConfig = AltertableConfig(environment: "original", trackingConsent: .granted, debug: false)
         client = Altertable(apiKey: "pk_test_123", config: originalConfig, session: session)
-
         // Mutate the original config object externally
         originalConfig.environment = "mutated"
         originalConfig.debug = true
         originalConfig.trackingConsent = TrackingConsentState.denied
-
         // Verify SDK still uses its internal copy (environment should still be "original")
         let exp = expectation(description: "Track with original environment")
         MockURLProtocol.requestHandler = { [self] request in
             if let body = request.httpBody,
                let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
             {
-                // SDK should use "original", not "mutated"
-                XCTAssertEqual(json["environment"] as? String, "original", "SDK should use internal config copy, not external mutation")
+                XCTAssertEqual(
+                    json["environment"] as? String,
+                    "original",
+                    "SDK should use internal config copy, not external mutation"
+                )
             }
             exp.fulfill()
             return successResponse(url: request.url!)
         }
-
         client.track(event: "test_external_mutation")
         wait(for: [exp], timeout: 1.0)
-
         // Verify that configure() still works (it should update the internal copy)
         let configureExp = expectation(description: "Track after configure")
         MockURLProtocol.requestHandler = { [self] request in
             if let body = request.httpBody,
                let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
             {
-                XCTAssertEqual(json["environment"] as? String, "configured", "configure() should update internal config")
+                XCTAssertEqual(
+                    json["environment"] as? String,
+                    "configured",
+                    "configure() should update internal config"
+                )
             }
             configureExp.fulfill()
             return successResponse(url: request.url!)
         }
-
         client.configure(PartialAltertableConfig(environment: "configured"))
         client.track(event: "test_after_configure")
         wait(for: [configureExp], timeout: 1.0)
