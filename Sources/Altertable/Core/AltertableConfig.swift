@@ -5,19 +5,40 @@
 
 import Foundation
 
-public struct AltertableConfig {
-    public let apiKey: String
+public class AltertableConfig {
+    /// The base URL of the Altertable API.
+    /// - Default: `"https://api.altertable.ai"`
     public var baseURL: String
+
+    /// The environment of the application.
+    /// - Default: `"production"`
     public var environment: String
+
+    /// The tracking consent state.
+    /// - Default: `.granted`
     public var trackingConsent: TrackingConsentState
+
+    /// The release ID of the application.
+    /// This is helpful to identify the version of the application an event is coming from.
+    /// When `nil`, the SDK automatically reads `CFBundleShortVersionString` from your app's bundle.
     public var release: String?
+
+    /// Optional error handler for intercepting SDK errors.
     public var onError: ((Error) -> Void)?
+
+    /// Whether to log events to the console.
+    /// - Default: `false`
     public var debug: Bool
+
+    /// The timeout interval for outgoing HTTP requests.
+    /// - Default: `10` seconds
     public var requestTimeout: TimeInterval
+
+    /// Whether to flush the event queue when the app moves to the background.
+    /// - Default: `true`
     public var flushOnBackground: Bool
-    
+
     public init(
-        apiKey: String,
         baseURL: String = SDKConstants.defaultBaseURL,
         environment: String = SDKConstants.defaultEnvironment,
         trackingConsent: TrackingConsentState = SDKConstants.defaultTrackingConsent,
@@ -27,7 +48,6 @@ public struct AltertableConfig {
         requestTimeout: TimeInterval = SDKConstants.mobileRequestTimeout,
         flushOnBackground: Bool = SDKConstants.defaultFlushOnBackground
     ) {
-        self.apiKey = apiKey
         self.baseURL = baseURL
         self.environment = environment
         self.trackingConsent = trackingConsent
@@ -39,11 +59,16 @@ public struct AltertableConfig {
     }
 }
 
-public struct PartialAltertableConfig {
+public class PartialAltertableConfig {
+    /// The tracking consent state to apply.
     public var trackingConsent: TrackingConsentState?
+
+    /// Whether to enable debug logging.
     public var debug: Bool?
+
+    /// The environment to apply.
     public var environment: String?
-    
+
     public init(
         trackingConsent: TrackingConsentState? = nil,
         debug: Bool? = nil,
