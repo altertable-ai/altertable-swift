@@ -7,6 +7,16 @@ on:
     branches: [ "main" ]
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    container: ghcr.io/realm/swiftlint:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Lint
+        run: swiftlint
+
   test:
     name: Swift Test
     runs-on: ubuntu-latest
