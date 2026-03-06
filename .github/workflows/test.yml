@@ -27,7 +27,8 @@ jobs:
         ports:
           - 15001:15001
         env:
-          ALTERTABLE_MOCK_API_KEY: "pk_test_1234567890"
+          ALTERTABLE_MOCK_API_KEYS: "pk_test_1234567890"
+          ALTERTABLE_MOCK_ENVIRONMENTS: "production,integration-test"
           RUST_LOG: debug
         options: >-
           --health-cmd "exit 0"
@@ -48,26 +49,6 @@ jobs:
           
       - name: Resolve Dependencies
         run: swift package resolve
-
-      - name: Debug Mock
-        run: |
-          echo "Trying X-API-Key..."
-          curl -v -X POST http://localhost:15001/track \
-          -H "Content-Type: application/json" \
-          -H "X-API-Key: pk_test_1234567890" \
-          -d '{"event":"debug_event","distinct_id":"debug_user","environment":"test"}' || true
-
-          echo "Trying Authorization Bearer..."
-          curl -v -X POST http://localhost:15001/track \
-          -H "Content-Type: application/json" \
-          -H "Authorization: Bearer pk_test_1234567890" \
-          -d '{"event":"debug_event","distinct_id":"debug_user","environment":"test"}' || true
-          
-          echo "Trying Basic Auth..."
-          curl -v -X POST http://localhost:15001/track \
-          -H "Content-Type: application/json" \
-          -u "pk_test_1234567890:" \
-          -d '{"event":"debug_event","distinct_id":"debug_user","environment":"test"}' || true
 
       - name: Run Tests
         run: swift test
