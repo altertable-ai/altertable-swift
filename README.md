@@ -24,6 +24,17 @@ let client = Altertable(apiKey: "your-api-key")
 client.track(event: "Button Clicked", properties: ["button_id": "signup"])
 ```
 
+## Examples
+
+Check out the [Examples](./Examples) directory for a complete runnable mini-app.
+
+#### Signup Funnel (SwiftUI)
+A complete 4-step signup funnel matching our web example journey:
+1. **Personal Info**: `track("Step Viewed")`
+2. **Account Setup**: `track("Account Setup Completed")`
+3. **Choose Plan**: `track("Plan Selected")`
+4. **Completion**: `identify(userId, traits)` and `track("Form Submitted")`
+
 ## API Reference
 
 ### `track(event:properties:)`
@@ -85,7 +96,7 @@ Initialize with an `AltertableConfig` object for advanced options.
 | `environment` | `String` | `production` | Environment name (e.g. `staging`). |
 | `trackingConsent` | `TrackingConsentState` | `.granted` | Controls if tracking is enabled. |
 | `debug` | `Bool` | `false` | Enables verbose logging. |
-| `requestTimeout` | `TimeInterval` | `30.0` | Network request timeout in seconds. |
+| `requestTimeout` | `TimeInterval` | `10.0` | Network request timeout in seconds. |
 | `flushOnBackground` | `Bool` | `true` | Automatically flush events when app backgrounds. |
 
 ## License
