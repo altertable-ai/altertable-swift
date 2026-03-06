@@ -27,7 +27,8 @@ jobs:
         ports:
           - 15001:15001
         env:
-          ALTERTABLE_MOCK_API_KEY: "test_pk_abc123"
+          ALTERTABLE_MOCK_API_KEY: "pk_test_1234567890"
+          RUST_LOG: debug
         options: >-
           --health-cmd "exit 0"
           --health-interval 5s
@@ -53,19 +54,19 @@ jobs:
           echo "Trying X-API-Key..."
           curl -v -X POST http://localhost:15001/track \
           -H "Content-Type: application/json" \
-          -H "X-API-Key: test_pk_abc123" \
+          -H "X-API-Key: pk_test_1234567890" \
           -d '{"event":"debug_event","distinct_id":"debug_user","environment":"test"}' || true
 
           echo "Trying Authorization Bearer..."
           curl -v -X POST http://localhost:15001/track \
           -H "Content-Type: application/json" \
-          -H "Authorization: Bearer test_pk_abc123" \
+          -H "Authorization: Bearer pk_test_1234567890" \
           -d '{"event":"debug_event","distinct_id":"debug_user","environment":"test"}' || true
           
           echo "Trying Basic Auth..."
           curl -v -X POST http://localhost:15001/track \
           -H "Content-Type: application/json" \
-          -u "test_pk_abc123:" \
+          -u "pk_test_1234567890:" \
           -d '{"event":"debug_event","distinct_id":"debug_user","environment":"test"}' || true
 
       - name: Run Tests
