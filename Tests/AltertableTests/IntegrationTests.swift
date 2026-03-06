@@ -46,7 +46,7 @@ final class IntegrationTests: XCTestCase {
         }
         
         // Use a standard key format
-        client = Altertable(apiKey: "pk_test_1234567890", config: config)
+        client = Altertable(apiKey: "test_pk_abc123", config: config)
         
         latch.enter()
         client.identify(userId: "user_integration_123", traits: ["plan": AnyCodable("premium")])
