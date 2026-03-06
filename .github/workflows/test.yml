@@ -50,9 +50,22 @@ jobs:
 
       - name: Debug Mock
         run: |
+          echo "Trying X-API-Key..."
           curl -v -X POST http://localhost:15001/track \
           -H "Content-Type: application/json" \
           -H "X-API-Key: test_pk_abc123" \
+          -d '{"event":"debug_event","distinct_id":"debug_user","environment":"test"}' || true
+
+          echo "Trying Authorization Bearer..."
+          curl -v -X POST http://localhost:15001/track \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer test_pk_abc123" \
+          -d '{"event":"debug_event","distinct_id":"debug_user","environment":"test"}' || true
+          
+          echo "Trying Basic Auth..."
+          curl -v -X POST http://localhost:15001/track \
+          -H "Content-Type: application/json" \
+          -u "test_pk_abc123:" \
           -d '{"event":"debug_event","distinct_id":"debug_user","environment":"test"}' || true
 
       - name: Run Tests
