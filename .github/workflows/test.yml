@@ -1,0 +1,27 @@
+name: Test
+
+on:
+  push:
+    branches: [ "main", "update/specs-v0.8.0" ]
+  pull_request:
+    branches: [ "main", "update/specs-v0.8.0" ]
+
+jobs:
+  test:
+    name: Swift Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Verify Package.swift
+        run: |
+          if [ ! -f "Package.swift" ]; then
+            echo "::error::Package.swift not found. Ensure this workflow runs on the correct branch."
+            exit 1
+          fi
+          
+      - name: Resolve Dependencies
+        run: swift package resolve
+
+      - name: Run Tests
+        run: swift test
