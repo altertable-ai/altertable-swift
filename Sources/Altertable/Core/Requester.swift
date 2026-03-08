@@ -5,7 +5,7 @@
 
 import Foundation
 #if canImport(FoundationNetworking)
-import FoundationNetworking
+    import FoundationNetworking
 #endif
 
 enum APIError: Error {
@@ -16,114 +16,148 @@ enum APIError: Error {
 }
 
 class Requester {
-    private let config: AltertableConfig
+    private let apiKey: String
     private let session: URLSession
-    
-    init(config: AltertableConfig, session: URLSession? = nil) {
-        self.config = config
-        
-        if let session = session {
+
+    // `retryBaseDelay` is a test-only override; guard all access through `delayQueue`.
+    private let delayQueue = DispatchQueue(label: "ai.altertable.requester.delay")
+    private var _retryBaseDelay: Double = 2.0
+    var retryBaseDelay: Double {
+        get { delayQueue.sync { _retryBaseDelay } }
+        set { delayQueue.sync { _retryBaseDelay = newValue } }
+    }
+
+    /// ConfigRef exists so that Altertable can hold a reference to it for the
+    /// URLSession timeout snapshot taken at init time. Requester does NOT read it
+    /// after init — all config values needed per-request are passed explicitly to
+    /// avoid cross-thread access on arbitrary URLSession callback threads.
+    final class ConfigRef {
+        var config: AltertableConfig
+        init(_ config: AltertableConfig) {
+            self.config = config
+        }
+    }
+
+    init(apiKey: String, configRef: ConfigRef, session: URLSession? = nil) {
+        self.apiKey = apiKey
+
+        if let session {
             self.session = session
         } else {
             let sessionConfig = URLSessionConfiguration.default
-            sessionConfig.timeoutIntervalForRequest = config.requestTimeout
-            sessionConfig.timeoutIntervalForResource = config.requestTimeout
+            // Snapshot timeout at init time — safe because init runs on the
+            // Altertable serial queue before any concurrent access begins.
+            sessionConfig.timeoutIntervalForRequest = configRef.config.requestTimeout
+            sessionConfig.timeoutIntervalForResource = configRef.config.requestTimeout
             self.session = URLSession(configuration: sessionConfig)
         }
     }
-    
-    func send(_ payload: TrackPayload, completion: @escaping (Result<Void, Error>) -> Void) {
-        sendRequest(endpoint: "/track", payload: payload, completion: completion)
+
+    // MARK: - Public send methods
+
+    // `baseURL` is passed by the caller (Altertable's serial queue) so this class
+    // never reads shared config from an arbitrary thread.
+
+    func send(_ payload: TrackPayload, baseURL: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        sendRequest(endpoint: "/track", baseURL: baseURL, payload: payload, completion: completion)
     }
-    
-    func send(_ payload: IdentifyPayload, completion: @escaping (Result<Void, Error>) -> Void) {
-        sendRequest(endpoint: "/identify", payload: payload, completion: completion)
+
+    func send(_ payload: IdentifyPayload, baseURL: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        sendRequest(endpoint: "/identify", baseURL: baseURL, payload: payload, completion: completion)
     }
-    
-    func send(_ payload: AliasPayload, completion: @escaping (Result<Void, Error>) -> Void) {
-        sendRequest(endpoint: "/alias", payload: payload, completion: completion)
+
+    func send(_ payload: AliasPayload, baseURL: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        sendRequest(endpoint: "/alias", baseURL: baseURL, payload: payload, completion: completion)
     }
-    
-    private func sendRequest<T: Encodable>(endpoint: String, payload: T, completion: @escaping (Result<Void, Error>) -> Void) {
-        let url = URL(string: "\(config.baseURL)\(endpoint)")!
+
+    private func sendRequest(
+        endpoint: String,
+        baseURL: String,
+        payload: some Encodable,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        guard let url = URL(string: "\(baseURL)\(endpoint)") else {
+            completion(.failure(APIError.invalidURL))
+            return
+        }
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: true)!
-        components.queryItems = [URLQueryItem(name: "apiKey", value: config.apiKey)]
-        request.url = components.url
-        
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Use X-API-Key as the primary authentication method
+        request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+
         do {
             let encoder = JSONEncoder()
+            encoder.keyEncodingStrategy = .convertToSnakeCase
             request.httpBody = try encoder.encode(payload)
         } catch {
             completion(.failure(error))
             return
         }
-        
-        let finalRequest = request
-        
-        let task = session.dataTask(with: finalRequest) { [weak self] _, response, error in
-            guard let self = self else { return }
-            
-            if let error = error {
-                // Retry? For now we just fail, but the Queue in Altertable (Phase 11) says "TODO: Re-queue on recoverable error"
-                // Implementing retry at Requester level is better for transient network errors.
-                self.retry(request: finalRequest, attempt: 1, maxAttempts: 3, completion: completion, originalError: error)
+
+        execute(request: request, attempt: 1, maxAttempts: 3, completion: completion)
+    }
+
+    private func execute(
+        request: URLRequest,
+        attempt: Int,
+        maxAttempts: Int,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        let task = session.dataTask(with: request) { [weak self] _, response, error in
+            guard let self else { return }
+
+            if let error {
+                self.retryOrFail(
+                    request: request,
+                    attempt: attempt,
+                    maxAttempts: maxAttempts,
+                    error: error,
+                    completion: completion
+                )
                 return
             }
-            
+
             if let httpResponse = response as? HTTPURLResponse {
-                if (500...599).contains(httpResponse.statusCode) || httpResponse.statusCode == 429 {
-                     self.retry(request: finalRequest, attempt: 1, maxAttempts: 3, completion: completion, originalError: APIError.httpError(httpResponse.statusCode))
-                     return
+                let status = httpResponse.statusCode
+                if (500 ... 599).contains(status) || status == 429 {
+                    self.retryOrFail(
+                        request: request,
+                        attempt: attempt,
+                        maxAttempts: maxAttempts,
+                        error: APIError.httpError(status),
+                        completion: completion
+                    )
+                    return
                 }
-                
-                guard (200...299).contains(httpResponse.statusCode) else {
-                    completion(.failure(APIError.httpError(httpResponse.statusCode)))
+
+                guard (200 ... 299).contains(status) else {
+                    completion(.failure(APIError.httpError(status)))
                     return
                 }
             }
-            
+
             completion(.success(()))
         }
-        
         task.resume()
     }
-    
-    private func retry(request: URLRequest, attempt: Int, maxAttempts: Int, completion: @escaping (Result<Void, Error>) -> Void, originalError: Error) {
+
+    private func retryOrFail(
+        request: URLRequest,
+        attempt: Int,
+        maxAttempts: Int,
+        error: Error,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
         guard attempt < maxAttempts else {
-            completion(.failure(originalError))
+            completion(.failure(error))
             return
         }
-        
-        let delay = pow(2.0, Double(attempt)) // Exponential backoff: 2s, 4s, 8s...
+
+        let delay = pow(retryBaseDelay, Double(attempt))
         DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self = self else { return }
-            let task = self.session.dataTask(with: request) { [weak self] _, response, error in
-                guard let self = self else { return }
-                
-                if let error = error {
-                    self.retry(request: request, attempt: attempt + 1, maxAttempts: maxAttempts, completion: completion, originalError: error)
-                    return
-                }
-                
-                if let httpResponse = response as? HTTPURLResponse {
-                    if (500...599).contains(httpResponse.statusCode) || httpResponse.statusCode == 429 {
-                        self.retry(request: request, attempt: attempt + 1, maxAttempts: maxAttempts, completion: completion, originalError: APIError.httpError(httpResponse.statusCode))
-                        return
-                    }
-                    
-                    guard (200...299).contains(httpResponse.statusCode) else {
-                        completion(.failure(APIError.httpError(httpResponse.statusCode)))
-                        return
-                    }
-                }
-                
-                completion(.success(()))
-            }
-            task.resume()
+            self?.execute(request: request, attempt: attempt + 1, maxAttempts: maxAttempts, completion: completion)
         }
     }
 }

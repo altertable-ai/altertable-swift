@@ -1,0 +1,11 @@
+{
+    "packages": {
+      ".": {
+        "release-type": "simple",
+        "package-name": "altertable-swift",
+        "extra-files": [
+          "Sources/Altertable/Core/SDKConstants.swift"
+        ]
+      }
+    }
+}

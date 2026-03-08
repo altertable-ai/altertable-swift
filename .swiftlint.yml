@@ -1,0 +1,16 @@
+excluded:
+  - .build
+
+disabled_rules:
+  - trailing_comma
+  - opening_brace
+
+identifier_name:
+  excluded:
+    - id
+
+file_length:
+  warning: 500
+
+type_body_length:
+  warning: 400
