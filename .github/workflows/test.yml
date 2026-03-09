@@ -13,23 +13,35 @@ jobs:
     container: ghcr.io/realm/swiftlint:latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Run Lint
         run: swiftlint
 
   test:
-    name: Swift Test
+    name: Swift Test (macOS)
     runs-on: macos-14
-    # Runs on macOS to test all Apple-specific APIs (OSLog, sysctl, UIKit, etc.) natively.
-    # Note: Integration tests requiring the Docker mock server will be skipped automatically.
-
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Start Colima (Docker for macOS)
+        run: |
+          brew install colima docker
+          colima start
+          
+      - name: Start Altertable Mock Server
+        run: |
+          docker run -d -p 15001:15001 \
+            -e ALTERTABLE_MOCK_API_KEYS="test_pk_abc123" \
+            -e ALTERTABLE_MOCK_ENVIRONMENTS="production,integration-test" \
+            ghcr.io/altertable-ai/altertable-mock:latest
+          
+          # Wait for healthcheck
+          sleep 10
+          curl -s http://localhost:15001/health || true
       
       - name: Verify Package.swift
         run: |
           if [ ! -f "Package.swift" ]; then
-            echo "::error::Package.swift not found. Ensure this workflow runs on the correct branch."
+            echo "::error::Package.swift not found."
             exit 1
           fi
           
