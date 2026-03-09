@@ -5,6 +5,9 @@
 
 @testable import Altertable
 import XCTest
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 // Integration tests run against the altertable-mock server (ghcr.io/altertable-ai/altertable-mock).
 // In CI the mock is started automatically via the GitHub Actions service defined in test.yml.

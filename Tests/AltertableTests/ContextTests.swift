@@ -33,17 +33,29 @@ final class ContextTests: XCTestCase {
 
     func testDeviceModelIsNotEmpty() {
         XCTAssertFalse(Context.deviceModel.isEmpty)
+        #if canImport(Darwin)
         XCTAssertNotEqual(Context.deviceModel, "unknown")
+        #else
+        XCTAssertEqual(Context.deviceModel, "unknown")
+        #endif
     }
 
     func testDeviceNameIsNotEmpty() {
         XCTAssertFalse(Context.deviceName.isEmpty)
+        #if canImport(Darwin)
         XCTAssertNotEqual(Context.deviceName, "unknown")
+        #else
+        XCTAssertEqual(Context.deviceName, "unknown")
+        #endif
     }
 
     func testDeviceTypeIsNotEmpty() {
         XCTAssertFalse(Context.deviceType.isEmpty)
+        #if canImport(Darwin)
         XCTAssertNotEqual(Context.deviceType, "unknown")
+        #else
+        XCTAssertEqual(Context.deviceType, "unknown")
+        #endif
     }
 
     func testDeviceNameAndTypeInSystemProperties() {
