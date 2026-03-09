@@ -5,54 +5,51 @@
 
 import Foundation
 
-public enum SDKConstants {
-    public static let libraryName = "altertable-swift"
-    public static let libraryVersion = "0.1.0"
+enum SDKConstants {
+    static let libraryName = "altertable-swift"
+    static let libraryVersion = "0.1.0"
 
-    // API
-    public static let defaultBaseURL = "https://api.altertable.ai"
-    public static let mobileRequestTimeout: TimeInterval = 10.0
+    enum StorageKeys {
+        static let deviceId = "atbl.device_id"
+        static let distinctId = "atbl.distinct_id"
+        static let anonymousId = "atbl.anonymous_id"
+        static let sessionId = "atbl.session_id"
+        static let lastEventAt = "atbl.last_event_at"
 
-    public enum StorageKeys {
-        public static let deviceId = "atbl.device_id"
-        public static let distinctId = "atbl.distinct_id"
-        public static let anonymousId = "atbl.anonymous_id"
-        public static let sessionId = "atbl.session_id"
-        public static let lastEventAt = "atbl.last_event_at"
+        static let trackingConsent = "atbl.tracking_consent"
 
-        public static let trackingConsent = "atbl.tracking_consent"
-
-        public static let all: [String] = [deviceId, distinctId, anonymousId, sessionId, lastEventAt, trackingConsent]
+        static let all: [String] = [deviceId, distinctId, anonymousId, sessionId, lastEventAt, trackingConsent]
     }
 
-    public static let sessionExpirationTime: TimeInterval = 1800 // 30 minutes
+    static let sessionExpirationTime: TimeInterval = 1800 // 30 minutes
 
     // ID Prefixes
-    public static let prefixSessionId = "session"
-    public static let prefixAnonymousId = "anonymous"
-    public static let prefixDeviceId = "device"
+    static let prefixSessionId = "session"
+    static let prefixAnonymousId = "anonymous"
+    static let prefixDeviceId = "device"
 
     /// Events
-    public static let eventPageview = "$pageview"
+    static let eventPageview = "$pageview"
+    static let eventScreenView = "$screen"
 
     // Properties
-    public static let propertyLib = "$lib"
-    public static let propertyLibVersion = "$lib_version"
-    public static let propertyRelease = "$release"
+    static let propertyLib = "$lib"
+    static let propertyLibVersion = "$lib_version"
+    static let propertyRelease = "$release"
+    static let propertyAppName = "app_name" // FIXME: prefix with $ once supported by the API
+    static let propertyAppVersion = "app_version" // FIXME: prefix with $ once supported by the API
+    static let propertyAppBuild = "app_build" // FIXME: prefix with $ once supported by the API
+    static let propertyAppNamespace = "app_namespace" // FIXME: prefix with $ once supported by the API
+    static let propertyViewport = "$viewport"
+    static let propertyScreenName = "screen_name" // FIXME: prefix with $ once supported by the API 
+    static let propertyOs = "os" // FIXME: prefix with $ once supported by the API
+    static let propertyOsVersion = "os_version" // FIXME: prefix with $ once supported by the API
+    // FIXME: prefix with $ once supported by the API
+    static let propertyDeviceManufacturer = "device_manufacturer"
+    static let propertyDeviceModel = "device_model" // FIXME: prefix with $ once supported by the API
+    static let propertyDeviceName = "device_name" // FIXME: prefix with $ once supported by the API
+    static let propertyDeviceType = "device_type" // FIXME: prefix with $ once supported by the API
 
     /// Limits
-    public static let maxQueueSize = 1000
-
-    // Defaults
-    public static let defaultEnvironment = "production"
-    public static let defaultTrackingConsent: TrackingConsentState = .granted
-    public static let defaultFlushOnBackground = true
-    public static let defaultDebug = false
-}
-
-public enum TrackingConsentState: String, Codable {
-    case granted
-    case denied
-    case pending
-    case dismissed
+    static let maxQueueSize = 1000
 }

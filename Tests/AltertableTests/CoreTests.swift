@@ -91,7 +91,7 @@ final class CoreTests: XCTestCase {
             return successResponse(url: url)
         }
 
-        client.track(event: "test_event", properties: ["foo": AnyCodable("bar")])
+        client.track(event: "test_event", properties: ["foo": JSONValue("bar")])
 
         waitForExpectations(timeout: 1.0)
     }
@@ -123,7 +123,7 @@ final class CoreTests: XCTestCase {
             return successResponse(url: url)
         }
 
-        client.identify(userId: "user_123", traits: ["email": AnyCodable("user@example.com")])
+        client.identify(userId: "user_123", traits: ["email": JSONValue("user@example.com")])
         waitForExpectations(timeout: 1.0)
     }
 
@@ -193,8 +193,8 @@ final class CoreTests: XCTestCase {
         client.track(event: "post_reset")
         wait(for: [postResetExp], timeout: 1.0)
 
-        XCTAssertNotEqual(client.getDistinctId(), "user_123")
-        XCTAssertNil(client.getAnonymousId())
+        XCTAssertNotEqual(client.currentDistinctId(), "user_123")
+        XCTAssertNil(client.currentAnonymousId())
     }
 
     func testResetDeviceId() {
@@ -262,7 +262,7 @@ final class CoreTests: XCTestCase {
             updateExp.fulfill()
             return (HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
         }
-        client.updateTraits(["plan": AnyCodable("premium")])
+        client.updateTraits(["plan": JSONValue("premium")])
         wait(for: [updateExp], timeout: 1.0)
     }
 
@@ -280,7 +280,7 @@ final class CoreTests: XCTestCase {
             return (response, nil)
         }
 
-        client.updateTraits(["plan": AnyCodable("premium")])
+        client.updateTraits(["plan": JSONValue("premium")])
 
         let noRequestExp = expectation(description: "No request sent")
         noRequestExp.isInverted = true
@@ -355,7 +355,7 @@ final class CoreTests: XCTestCase {
             flushExp.fulfill()
             return successResponse(url: request.url!)
         }
-        client.configure(PartialAltertableConfig(trackingConsent: .granted))
+        client.configure { $0.trackingConsent = .granted }
         wait(for: [flushExp], timeout: 1.0)
     }
 
@@ -373,7 +373,7 @@ final class CoreTests: XCTestCase {
             )!
             return (response, nil)
         }
-        client.configure(PartialAltertableConfig(trackingConsent: .denied))
+        client.configure { $0.trackingConsent = .denied }
         let noSendExp = expectation(description: "No request after denied")
         noSendExp.isInverted = true
         wait(for: [noSendExp], timeout: 0.2)
@@ -446,53 +446,9 @@ final class CoreTests: XCTestCase {
             exp.fulfill()
             return successResponse(url: request.url!)
         }
-        client.configure(PartialAltertableConfig(environment: "development"))
+        client.configure { $0.environment = "development" }
         client.track(event: "env_test")
         wait(for: [exp], timeout: 1.0)
     }
 
-    func testExternalConfigMutationDoesNotAffectSDK() {
-        // Verify that mutating the original config object after init doesn't bypass SDK side effects
-        let originalConfig = AltertableConfig(environment: "original", trackingConsent: .granted, debug: false)
-        client = Altertable(apiKey: "pk_test_123", config: originalConfig, session: session)
-        // Mutate the original config object externally
-        originalConfig.environment = "mutated"
-        originalConfig.debug = true
-        originalConfig.trackingConsent = TrackingConsentState.denied
-        // Verify SDK still uses its internal copy (environment should still be "original")
-        let exp = expectation(description: "Track with original environment")
-        MockURLProtocol.requestHandler = { [self] request in
-            if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
-            {
-                XCTAssertEqual(
-                    json["environment"] as? String,
-                    "original",
-                    "SDK should use internal config copy, not external mutation"
-                )
-            }
-            exp.fulfill()
-            return successResponse(url: request.url!)
-        }
-        client.track(event: "test_external_mutation")
-        wait(for: [exp], timeout: 1.0)
-        // Verify that configure() still works (it should update the internal copy)
-        let configureExp = expectation(description: "Track after configure")
-        MockURLProtocol.requestHandler = { [self] request in
-            if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
-            {
-                XCTAssertEqual(
-                    json["environment"] as? String,
-                    "configured",
-                    "configure() should update internal config"
-                )
-            }
-            configureExp.fulfill()
-            return successResponse(url: request.url!)
-        }
-        client.configure(PartialAltertableConfig(environment: "configured"))
-        client.track(event: "test_after_configure")
-        wait(for: [configureExp], timeout: 1.0)
-    }
 }

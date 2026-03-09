@@ -20,6 +20,9 @@ jobs:
   test:
     name: Swift Test
     runs-on: ubuntu-latest
+    # Note: This runs on Linux, so UIKit-specific tests (auto-capture) are compiled but not executed.
+    # UIKit tests require an Apple platform (iOS/tvOS simulator or macOS). The SDK's core functionality
+    # and cross-platform APIs (screen(), track(), identify(), etc.) are tested here.
 
     services:
       altertable:

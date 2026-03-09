@@ -14,15 +14,11 @@ import Foundation
     import FoundationNetworking
 #endif
 
-public class Altertable {
+public final class Altertable: @unchecked Sendable {
     /// All mutable state is accessed exclusively on this queue.
     private let queue = DispatchQueue(label: "ai.altertable.sdk", qos: .utility)
 
-    private let configRef: Requester.ConfigRef
-    private var config: AltertableConfig {
-        get { configRef.config }
-        set { configRef.config = newValue }
-    }
+    private var config: AltertableConfig
 
     private let sessionManager: SessionManager
     private let storage: Storage
@@ -37,10 +33,12 @@ public class Altertable {
     // Event queue — accessed only on `queue`
     private var eventQueue: [QueuedRequest] = []
     private let queueStorage: QueueStorage
-    var maxQueueSize: Int = SDKConstants.maxQueueSize
+    internal var maxQueueSize: Int = SDKConstants.maxQueueSize
 
     /// NotificationCenter token for lifecycle hooks
     private var backgroundObserver: AnyObject?
+
+    private var screenViewIntegration: ScreenViewIntegration?
 
     enum QueuedRequest: Codable {
         case track(TrackPayload)
@@ -65,30 +63,14 @@ public class Altertable {
     }
 
     init(apiKey: String, config: AltertableConfig? = nil, session: URLSession? = nil) {
-        // Create an internal copy of the config so external mutations don't bypass SDK side effects
-        let internalConfig: AltertableConfig
-        if let provided = config {
-            internalConfig = AltertableConfig(
-                baseURL: provided.baseURL,
-                environment: provided.environment,
-                trackingConsent: provided.trackingConsent,
-                release: provided.release,
-                onError: provided.onError,
-                debug: provided.debug,
-                requestTimeout: provided.requestTimeout,
-                flushOnBackground: provided.flushOnBackground
-            )
-        } else {
-            internalConfig = AltertableConfig()
-        }
+        var internalConfig = config ?? AltertableConfig()
 
-        let ref = Requester.ConfigRef(internalConfig)
-        configRef = ref
+        self.config = internalConfig
         logger = Logger(isDebug: internalConfig.debug)
         queueStorage = QueueStorage(logger: logger)
         storage = UserDefaultsStorage()
         sessionManager = SessionManager(storage: storage)
-        requester = Requester(apiKey: apiKey, configRef: ref, session: session)
+        requester = Requester(apiKey: apiKey, requestTimeout: internalConfig.requestTimeout, session: session)
 
         if let storedDevice = storage.string(forKey: SDKConstants.StorageKeys.deviceId) {
             deviceId = storedDevice
@@ -117,12 +99,17 @@ public class Altertable {
         eventQueue = queueStorage.load()
 
         setupLifecycleHooks()
+        setupScreenViews(enabled: internalConfig.captureScreenViews)
     }
 
     deinit {
         if let token = backgroundObserver {
             NotificationCenter.default.removeObserver(token)
         }
+        // Remove any waiting callbacks if we never held ownership
+        ScreenViewIntegration.dequeueCallback(ifOwner: self)
+        // Release screen view integration ownership
+        ScreenViewIntegration.releaseOwnership(ifOwner: self)
     }
 
     // MARK: - Public API
@@ -141,20 +128,20 @@ public class Altertable {
     ///     "currency": "USD",
     /// ])
     /// ```
-    public func track(event: String, properties: [String: AnyCodable] = [:]) {
+    public func track(event: String, properties: [String: JSONValue] = [:]) {
         queue.async { [self] in
-            let timestamp = Date().ISO8601Format()
-            let sessionId = sessionManager.getSessionId()
+            let timestamp = Date().iso8601String()
+            let sessionId = sessionManager.currentSessionId()
 
             var finalProperties = Context.getSystemProperties()
 
             if let release = config.release ??
                 (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String)
             {
-                finalProperties[SDKConstants.propertyRelease] = AnyCodable(release)
+                finalProperties[SDKConstants.propertyRelease] = JSONValue(release)
             }
 
-            properties.forEach { finalProperties[$0] = $1 }
+            finalProperties.merge(properties) { _, new in new }
 
             let payload = TrackPayload(
                 timestamp: timestamp,
@@ -190,7 +177,7 @@ public class Altertable {
     ///     "role": "Software Engineer",
     /// ])
     /// ```
-    public func identify(userId: String, traits: [String: AnyCodable] = [:]) {
+    public func identify(userId: String, traits: [String: JSONValue] = [:]) {
         queue.async { [self] in
             do {
                 try Validator.validateUserId(userId)
@@ -207,7 +194,7 @@ public class Altertable {
                         "The session has been automatically reset. " +
                         "Use alias() to link the new ID to the existing one if intentional."
                 )
-                resetLocked()
+                _reset()
             }
 
             if distinctId != userId {
@@ -269,7 +256,7 @@ public class Altertable {
     ///     "onboarding_completed": true,
     /// ])
     /// ```
-    public func updateTraits(_ traits: [String: AnyCodable]) {
+    public func updateTraits(_ traits: [String: JSONValue]) {
         queue.async { [self] in
             guard anonymousId != nil else {
                 logger.warn("User must be identified with identify() before updating traits.")
@@ -304,12 +291,12 @@ public class Altertable {
     /// ```
     public func reset(resetDeviceId: Bool = false, resetTrackingConsent: Bool = false) {
         queue.async { [self] in
-            resetLocked(resetDeviceId: resetDeviceId)
+            _reset(resetDeviceId: resetDeviceId)
 
             if resetTrackingConsent {
-                config.trackingConsent = SDKConstants.defaultTrackingConsent
+                config.trackingConsent = AltertableConfig.defaultTrackingConsent
                 storage.set(
-                    SDKConstants.defaultTrackingConsent.rawValue,
+                    AltertableConfig.defaultTrackingConsent.rawValue,
                     forKey: SDKConstants.StorageKeys.trackingConsent
                 )
             }
@@ -318,35 +305,46 @@ public class Altertable {
 
     /// Updates the configuration after initialization.
     ///
-    /// - Parameter newConfig: Configuration updates to apply.
+    /// - Parameter updates: A closure that modifies the configuration in place.
     ///
     /// - Example:
     /// ```swift
-    /// altertable.configure(PartialAltertableConfig(
-    ///     trackingConsent: .granted
-    /// ))
+    /// altertable.configure { config in
+    ///     config.trackingConsent = .granted
+    ///     config.debug = true
+    /// }
     /// ```
-    public func configure(_ newConfig: PartialAltertableConfig) {
+    public func configure(_ updates: @escaping (inout AltertableConfig) -> Void) {
         queue.async { [self] in
-            if let consent = newConfig.trackingConsent {
-                config.trackingConsent = consent
-                storage.set(consent.rawValue, forKey: SDKConstants.StorageKeys.trackingConsent)
+            let previousConsent = config.trackingConsent
+            // Snapshot init-only fields that cannot be changed after initialization
+            let frozenTimeout = config.requestTimeout
+            let frozenFlush = config.flushOnBackground
 
-                if consent == .granted {
-                    flushLocked()
-                } else if consent == .denied {
+            updates(&config)
+
+            // Restore init-only fields (they are only read at init time)
+            config.requestTimeout = frozenTimeout
+            config.flushOnBackground = frozenFlush
+
+            // Handle tracking consent changes
+            if config.trackingConsent != previousConsent {
+                storage.set(config.trackingConsent.rawValue, forKey: SDKConstants.StorageKeys.trackingConsent)
+
+                if config.trackingConsent == .granted {
+                    _flush()
+                } else if config.trackingConsent == .denied {
                     eventQueue.removeAll()
                     queueStorage.save(eventQueue)
                 }
             }
 
-            if let debug = newConfig.debug {
-                config.debug = debug
-                logger.setDebug(debug)
-            }
+            // Handle debug changes
+            logger.setDebug(config.debug)
 
-            if let environment = newConfig.environment {
-                config.environment = environment
+            // Handle screen view capture changes
+            if config.captureScreenViews != (screenViewIntegration?.isEnabled ?? false) {
+                updateScreenViewCapture(enabled: config.captureScreenViews)
             }
         }
     }
@@ -359,26 +357,22 @@ public class Altertable {
     /// ```
     public func flush() {
         queue.async { [self] in
-            flushLocked()
+            _flush()
         }
     }
 
     // MARK: - Internal accessors for testing
 
-    func getDistinctId() -> String {
+    func currentDistinctId() -> String {
         queue.sync { distinctId }
     }
 
-    func getAnonymousId() -> String? {
+    func currentAnonymousId() -> String? {
         queue.sync { anonymousId }
     }
 
     func setRetryBaseDelay(_ delay: Double) {
         requester.retryBaseDelay = delay
-    }
-
-    func setMaxQueueSize(_ size: Int) {
-        queue.async { self.maxQueueSize = size }
     }
 
     // MARK: - Private — must only be called from within `queue`
@@ -395,16 +389,17 @@ public class Altertable {
 
         eventQueue.append(request)
         // Persist only when consent is pending (events may survive app restart before
-        // consent is granted). When consent is granted, flushLocked() clears the queue
+        // consent is granted). When consent is granted, _flush() clears the queue
         // and persists the empty state immediately after, so per-enqueue writes are
         // redundant and expensive for high-frequency tracking.
         if config.trackingConsent != .granted {
             queueStorage.save(eventQueue)
         }
-        flushLocked()
+        _flush()
     }
 
-    private func flushLocked() {
+    /// Queue-isolated flush implementation. Must only be called from within `queue`.
+    private func _flush() {
         guard !eventQueue.isEmpty else { return }
         guard config.trackingConsent == .granted else { return }
 
@@ -451,8 +446,8 @@ public class Altertable {
         }
     }
 
-    /// Must be called from within `queue`.
-    private func resetLocked(resetDeviceId: Bool = false) {
+    /// Queue-isolated reset implementation. Must only be called from within `queue`.
+    private func _reset(resetDeviceId: Bool = false) {
         sessionManager.renewSession()
         let newDistinct = SDKConstants.prefixAnonymousId + "-" + UUID().uuidString
         distinctId = newDistinct
@@ -484,8 +479,112 @@ public class Altertable {
             }
         #endif
     }
+
+    internal func setupScreenViews(enabled: Bool) {
+        // Only set up auto-capture on platforms that support it
+        #if canImport(UIKit) && !os(watchOS)
+            guard enabled else { return }
+
+            // Create a callback that will be invoked when ownership becomes available
+            let callback: () -> Void = { [weak self] in
+                guard let self = self else { return }
+                self.queue.async { [self] in
+                    // Retry claiming ownership
+                    guard ScreenViewIntegration.claimOwnership(client: self, logger: self.logger) else {
+                        return
+                    }
+                    guard let integration = ScreenViewIntegration.shared else {
+                        self.logger.warn("Failed to get screen view integration instance.")
+                        return
+                    }
+                    integration.installIfNeeded()
+                    self.screenViewIntegration = integration
+                }
+            }
+
+            guard ScreenViewIntegration.claimOwnership(client: self, logger: logger, onFailure: callback) else {
+                logger.warn(
+                    "Another Altertable instance already owns screen view auto-capture. "
+                    + "Will claim when available."
+                )
+                return
+            }
+
+            guard let integration = ScreenViewIntegration.shared else {
+                logger.warn("Failed to get screen view integration instance.")
+                return
+            }
+            integration.installIfNeeded()
+            screenViewIntegration = integration
+        #else
+            // On non-UIKit platforms, screen(name:) still works, but auto-capture is not available
+            // SwiftUI .screenView() modifier can still be used with explicit client parameter
+            if enabled {
+                logger.log(
+                    "Screen view auto-capture is only available on UIKit platforms. "
+                    + "Use screen(name:) or .screenView(name:client:) for manual tracking."
+                )
+            }
+        #endif
+    }
+
+    private func updateScreenViewCapture(enabled: Bool) {
+        #if canImport(UIKit) && !os(watchOS)
+            if enabled {
+                if screenViewIntegration == nil {
+                    // Create a callback that will be invoked when ownership becomes available
+                    let callback: () -> Void = { [weak self] in
+                        guard let self = self else { return }
+                        self.queue.async { [self] in
+                            // Retry claiming ownership
+                            guard ScreenViewIntegration.claimOwnership(client: self, logger: self.logger) else {
+                                return
+                            }
+                            guard let integration = ScreenViewIntegration.shared else {
+                                self.logger.warn("Failed to get screen view integration instance.")
+                                return
+                            }
+                            integration.installIfNeeded()
+                            self.screenViewIntegration = integration
+                        }
+                    }
+
+                    guard ScreenViewIntegration.claimOwnership(client: self, logger: logger, onFailure: callback) else {
+                        logger.warn(
+                            "Another Altertable instance already owns screen view auto-capture. "
+                            + "Will claim when available."
+                        )
+                        return
+                    }
+                    guard let integration = ScreenViewIntegration.shared else {
+                        logger.warn("Failed to get screen view integration instance.")
+                        return
+                    }
+                    integration.installIfNeeded()
+                    screenViewIntegration = integration
+                } else {
+                    // Re-enable if we already own it
+                    ScreenViewIntegration.reEnable(ifOwner: self)
+                    screenViewIntegration?.installIfNeeded()
+                }
+            } else {
+                // Disable and release ownership
+                ScreenViewIntegration.releaseOwnership(ifOwner: self)
+                screenViewIntegration = nil
+            }
+        #else
+            if enabled {
+                logger.log(
+                    "Screen view auto-capture is only available on UIKit platforms. "
+                    + "Use screen(name:) or .screenView(name:client:) for manual tracking."
+                )
+            }
+        #endif
+    }
 }
 
 #if canImport(Combine)
+    // Conformance to ObservableObject enables SwiftUI dependency injection via @StateObject/@EnvironmentObject.
+    // Note: This class does not use @Published properties, so it won't trigger view updates.
     extension Altertable: ObservableObject {}
 #endif

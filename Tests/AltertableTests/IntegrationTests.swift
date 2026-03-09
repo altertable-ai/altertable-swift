@@ -3,8 +3,8 @@
 //  AltertableTests
 //
 
-import XCTest
 @testable import Altertable
+import XCTest
 
 // Integration tests run against the altertable-mock server (ghcr.io/altertable-ai/altertable-mock).
 // In CI the mock is started automatically via the GitHub Actions service defined in test.yml.
@@ -14,16 +14,36 @@ import XCTest
 //   ghcr.io/altertable-ai/altertable-mock
 
 final class IntegrationTests: XCTestCase {
-    private static let mockBaseURL = "http://localhost:15001"
+    private static let mockBaseURL = URL(string: "http://localhost:15001")!
     private static let apiKey = "test_pk_abc123"
     private static let environment = "integration-test"
 
-    override func setUp() {
-        super.setUp()
+    override func setUpWithError() throws {
+        try super.setUpWithError()
         SDKConstants.StorageKeys.all.forEach { UserDefaults.standard.removeObject(forKey: $0) }
+        try skipIfServerUnavailable()
     }
 
     // MARK: - Helpers
+
+    private func skipIfServerUnavailable() throws {
+        let url = URL(string: "\(IntegrationTests.mockBaseURL)/health")!
+        let semaphore = DispatchSemaphore(value: 0)
+        var reachable = false
+        URLSession.shared.dataTask(with: url) { _, response, _ in
+            reachable = (response as? HTTPURLResponse) != nil
+            semaphore.signal()
+        }.resume()
+        _ = semaphore.wait(timeout: .now() + 1.5)
+        try XCTSkipUnless(
+            reachable,
+            "Integration mock server not available at \(IntegrationTests.mockBaseURL). " +
+                "Run: docker run -p 15001:15001 " +
+                "-e ALTERTABLE_MOCK_API_KEYS=test_pk_abc123 " +
+                "-e ALTERTABLE_MOCK_ENVIRONMENTS=production,integration-test " +
+                "ghcr.io/altertable-ai/altertable-mock"
+        )
+    }
 
     /// Returns a client pre-configured for the mock plus an inverted expectation that
     /// fails the test if `onError` is ever called.
@@ -51,8 +71,8 @@ final class IntegrationTests: XCTestCase {
         let (client, noError) = makeClient()
 
         client.track(event: "Button Clicked", properties: [
-            "button": AnyCodable("signup"),
-            "page": AnyCodable("home"),
+            "button": JSONValue("signup"),
+            "page": JSONValue("home"),
         ])
 
         wait(for: [noError], timeout: 3.0)
@@ -64,8 +84,8 @@ final class IntegrationTests: XCTestCase {
         let (client, noError) = makeClient()
 
         client.identify(userId: "user_integration_123", traits: [
-            "plan": AnyCodable("premium"),
-            "email": AnyCodable("test@example.com"),
+            "plan": JSONValue("premium"),
+            "email": JSONValue("test@example.com"),
         ])
 
         wait(for: [noError], timeout: 3.0)
@@ -89,8 +109,8 @@ final class IntegrationTests: XCTestCase {
 
         client.identify(userId: "user_traits_123")
         client.updateTraits([
-            "plan": AnyCodable("enterprise"),
-            "onboarded": AnyCodable(true),
+            "plan": JSONValue("enterprise"),
+            "onboarded": JSONValue(true),
         ])
 
         wait(for: [noError], timeout: 3.0)
@@ -136,18 +156,18 @@ final class IntegrationTests: XCTestCase {
         let (client, noError) = makeClient()
 
         // Anonymous phase
-        client.track(event: "Page Viewed", properties: ["page": AnyCodable("landing")])
+        client.track(event: "Page Viewed", properties: ["page": JSONValue("landing")])
 
         // Identification
         client.identify(userId: "user_funnel_789", traits: [
-            "email": AnyCodable("funnel@example.com"),
-            "source": AnyCodable("organic"),
+            "email": JSONValue("funnel@example.com"),
+            "source": JSONValue("organic"),
         ])
 
         // Authenticated events
         client.track(event: "Signup Completed")
-        client.track(event: "Plan Selected", properties: ["plan": AnyCodable("pro"), "price": AnyCodable(29)])
-        client.updateTraits(["onboarded": AnyCodable(true)])
+        client.track(event: "Plan Selected", properties: ["plan": JSONValue("pro"), "price": JSONValue(29)])
+        client.updateTraits(["onboarded": JSONValue(true)])
 
         wait(for: [noError], timeout: 5.0)
     }
@@ -171,11 +191,11 @@ final class IntegrationTests: XCTestCase {
         client.setRetryBaseDelay(0.1)
 
         // Queued while consent is pending — must not be sent yet
-        client.track(event: "queued_event", properties: ["source": AnyCodable("pre-consent")])
+        client.track(event: "queued_event", properties: ["source": JSONValue("pre-consent")])
         client.identify(userId: "user_pending_consent")
 
         // Granting consent flushes the queue
-        client.configure(PartialAltertableConfig(trackingConsent: .granted))
+        client.configure { $0.trackingConsent = .granted }
 
         wait(for: [noError], timeout: 5.0)
     }
@@ -187,7 +207,7 @@ final class IntegrationTests: XCTestCase {
 
         client.identify(userId: "user_batch_456")
         for step in 1 ... 5 {
-            client.track(event: "Step Completed", properties: ["step": AnyCodable(step)])
+            client.track(event: "Step Completed", properties: ["step": JSONValue(step)])
         }
 
         wait(for: [noError], timeout: 5.0)
