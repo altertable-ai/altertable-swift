@@ -21,11 +21,15 @@ final class Logger {
     }
 
     func setDebug(_ enabled: Bool) {
-        lock.withLock { isDebug = enabled }
+        lock.lock()
+        defer { lock.unlock() }
+        isDebug = enabled
     }
 
     func log(_ message: String) {
-        let shouldLog = lock.withLock { isDebug }
+        lock.lock()
+        let shouldLog = isDebug
+        lock.unlock()
         if shouldLog {
             #if canImport(os)
             os_log(.info, log: osLog, "%{public}@", message)
@@ -56,12 +60,17 @@ final class Logger {
     /// breakpoint will pause at the call site, making the source of the warning easy to find.
     func warn(_ message: String) {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
-        let shouldWarn = lock.withLock { () -> Bool in
-            guard isDebug else { return false }
-            guard !printedWarnings.contains(trimmed) else { return false }
+        lock.lock()
+        let shouldWarn: Bool
+        if !isDebug {
+            shouldWarn = false
+        } else if printedWarnings.contains(trimmed) {
+            shouldWarn = false
+        } else {
             printedWarnings.insert(trimmed)
-            return true
+            shouldWarn = true
         }
+        lock.unlock()
 
         guard shouldWarn else { return }
         
