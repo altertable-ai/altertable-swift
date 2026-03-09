@@ -19,25 +19,9 @@ jobs:
 
   test:
     name: Swift Test
-    runs-on: ubuntu-latest
-    # Note: This runs on Linux, so UIKit-specific tests (auto-capture) are compiled but not executed.
-    # UIKit tests require an Apple platform (iOS/tvOS simulator or macOS). The SDK's core functionality
-    # and cross-platform APIs (screen(), track(), identify(), etc.) are tested here.
-
-    services:
-      altertable:
-        image: ghcr.io/altertable-ai/altertable-mock:latest
-        ports:
-          - 15001:15001
-        env:
-          ALTERTABLE_MOCK_API_KEYS: "test_pk_abc123"
-          ALTERTABLE_MOCK_ENVIRONMENTS: "production,integration-test"
-        options: >-
-          --health-cmd "exit 0"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 3
-          --health-start-period 10s
+    runs-on: macos-14
+    # Runs on macOS to test all Apple-specific APIs (OSLog, sysctl, UIKit, etc.) natively.
+    # Note: Integration tests requiring the Docker mock server will be skipped automatically.
 
     steps:
       - uses: actions/checkout@v4
