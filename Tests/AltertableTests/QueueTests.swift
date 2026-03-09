@@ -4,9 +4,6 @@
 //
 
 import XCTest
-#if canImport(FoundationNetworking)
-    import FoundationNetworking
-#endif
 @testable import Altertable
 
 final class QueueTests: XCTestCase {
@@ -17,9 +14,6 @@ final class QueueTests: XCTestCase {
 
         SDKConstants.StorageKeys.all.forEach { UserDefaults.standard.removeObject(forKey: $0) }
 
-        #if canImport(FoundationNetworking)
-            let sessionConfig = URLSessionConfiguration.default
-        #else
             let sessionConfig = URLSessionConfiguration.ephemeral
         #endif
         sessionConfig.protocolClasses = [MockURLProtocol.self]

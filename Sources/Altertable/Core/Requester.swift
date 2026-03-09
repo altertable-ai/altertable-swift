@@ -4,9 +4,6 @@
 //
 
 import Foundation
-#if canImport(FoundationNetworking)
-    import FoundationNetworking
-#endif
 
 enum APIError: LocalizedError, Sendable {
     case invalidURL

@@ -10,9 +10,6 @@ import Foundation
 #if canImport(UIKit)
     import UIKit
 #endif
-#if canImport(FoundationNetworking)
-    import FoundationNetworking
-#endif
 
 public final class Altertable: @unchecked Sendable {
     /// All mutable state is accessed exclusively on this queue.

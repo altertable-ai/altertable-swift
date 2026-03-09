@@ -4,9 +4,6 @@
 //
 
 import Foundation
-#if canImport(FoundationNetworking)
-    import FoundationNetworking
-#endif
 
 class MockURLProtocol: URLProtocol {
     static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data?))?

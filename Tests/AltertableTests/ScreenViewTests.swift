@@ -4,9 +4,6 @@
 //
 
 import XCTest
-#if canImport(FoundationNetworking)
-    import FoundationNetworking
-#endif
 #if canImport(UIKit) && !os(watchOS)
     import UIKit
 #endif
@@ -21,9 +18,6 @@ final class ScreenViewTests: XCTestCase {
 
         SDKConstants.StorageKeys.all.forEach { UserDefaults.standard.removeObject(forKey: $0) }
 
-        #if canImport(FoundationNetworking)
-            let config = URLSessionConfiguration.default
-        #else
             let config = URLSessionConfiguration.ephemeral
         #endif
         config.protocolClasses = [MockURLProtocol.self]
