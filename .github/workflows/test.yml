@@ -13,17 +13,28 @@ jobs:
     container: ghcr.io/realm/swiftlint:latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Run Lint
         run: swiftlint
 
-  test:
-    name: Swift Test
-    runs-on: ubuntu-latest
-    # Note: This runs on Linux, so UIKit-specific tests (auto-capture) are compiled but not executed.
-    # UIKit tests require an Apple platform (iOS/tvOS simulator or macOS). The SDK's core functionality
-    # and cross-platform APIs (screen(), track(), identify(), etc.) are tested here.
+  test-apple:
+    name: Swift Test (macOS)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Package.swift
+        run: |
+          if [ ! -f "Package.swift" ]; then
+            echo "::error::Package.swift not found."
+            exit 1
+          fi
+      - name: Resolve Dependencies
+        run: swift package resolve
+      - name: Run Tests
+        run: swift test
 
+  test-linux:
+    name: Swift Test (Linux / Integration)
+    runs-on: ubuntu-latest
     services:
       altertable:
         image: ghcr.io/altertable-ai/altertable-mock:latest
@@ -38,19 +49,15 @@ jobs:
           --health-timeout 3s
           --health-retries 3
           --health-start-period 10s
-
     steps:
       - uses: actions/checkout@v4
-      
       - name: Verify Package.swift
         run: |
           if [ ! -f "Package.swift" ]; then
-            echo "::error::Package.swift not found. Ensure this workflow runs on the correct branch."
+            echo "::error::Package.swift not found."
             exit 1
           fi
-          
       - name: Resolve Dependencies
         run: swift package resolve
-
       - name: Run Tests
         run: swift test
