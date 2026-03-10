@@ -4,10 +4,16 @@
 //
 
 import Foundation
+
+#if canImport(os)
 import os
+#endif
 
 final class Logger {
+    #if canImport(os)
     private let osLog = OSLog(subsystem: "ai.altertable.sdk", category: "general")
+    #endif
+    
     private let lock = NSLock()
     private var isDebug: Bool
     private var printedWarnings: Set<String> = []
@@ -23,16 +29,28 @@ final class Logger {
     func log(_ message: String) {
         let shouldLog = lock.withLock { isDebug }
         if shouldLog {
+            #if canImport(os)
             os_log(.info, log: osLog, "%{public}@", message)
+            #else
+            print("INFO [ai.altertable.sdk]: \(message)")
+            #endif
         }
     }
 
     func error(_ message: String, error: Error? = nil) {
+        #if canImport(os)
         if let error {
             os_log(.error, log: osLog, "%{public}@ - %{public}@", message, error.localizedDescription)
         } else {
             os_log(.error, log: osLog, "%{public}@", message)
         }
+        #else
+        if let error {
+            print("ERROR [ai.altertable.sdk]: \(message) - \(error.localizedDescription)")
+        } else {
+            print("ERROR [ai.altertable.sdk]: \(message)")
+        }
+        #endif
     }
 
     /// Prints a warning at most once per unique message.
@@ -48,7 +66,12 @@ final class Logger {
         }
 
         guard shouldWarn else { return }
+        
+        #if canImport(os)
         os_log(.default, log: osLog, "WARN: %{public}@", trimmed)
+        #else
+        print("WARN [ai.altertable.sdk]: \(trimmed)")
+        #endif
 
         #if DEBUG
         // Throw-and-catch so "Break on All Exceptions" in Xcode pauses here,
