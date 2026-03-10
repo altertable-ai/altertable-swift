@@ -4,6 +4,10 @@
 //
 
 @testable import Altertable
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+import Foundation
 import XCTest
 
 // Integration tests run against the altertable-mock server (ghcr.io/altertable-ai/altertable-mock).
