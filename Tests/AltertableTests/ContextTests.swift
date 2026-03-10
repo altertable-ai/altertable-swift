@@ -83,6 +83,12 @@ final class ContextTests: XCTestCase {
 
     func testOsVersionIsNotEmpty() {
         XCTAssertFalse(Context.osVersion.isEmpty)
+        #if os(iOS) || os(tvOS) || os(macOS) || os(watchOS)
+        XCTAssertNotEqual(Context.osVersion, "unknown", "os_version must not be unknown on Apple platforms")
+        XCTAssertTrue(Context.osVersion.first?.isNumber ?? false, "os_version should be a version string (e.g. 14.0)")
+        #else
+        XCTAssertEqual(Context.osVersion, "unknown")
+        #endif
     }
 
     func testViewportInSystemProperties() {
