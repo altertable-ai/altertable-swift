@@ -48,7 +48,7 @@ final class ContextTests: XCTestCase {
 
     func testDeviceNameAndTypeInSystemProperties() {
         let props = Context.getSystemProperties()
-        XCTAssertNotNil(props[SDKConstants.propertyDeviceName], "Should include $device_name")
+        XCTAssertNotNil(props[SDKConstants.propertyDeviceName], "Should include $device")
         XCTAssertNotNil(props[SDKConstants.propertyDeviceType], "Should include $device_type")
     }
 

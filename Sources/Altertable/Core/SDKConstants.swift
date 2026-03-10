@@ -47,7 +47,7 @@ enum SDKConstants {
     // FIXME: prefix with $ once supported by the API
     static let propertyDeviceManufacturer = "device_manufacturer"
     static let propertyDeviceModel = "device_model" // FIXME: prefix with $ once supported by the API
-    static let propertyDeviceName = "device_name" // FIXME: prefix with $ once supported by the API
+    static let propertyDeviceName = "device" // FIXME: prefix with $ once supported by the API
     static let propertyDeviceType = "device_type" // FIXME: prefix with $ once supported by the API
 
     /// Limits
