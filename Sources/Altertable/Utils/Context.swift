@@ -63,9 +63,9 @@ enum Context {
     }
 
     static var osVersion: String {
-        #if canImport(UIKit)
+        #if canImport(UIKit) && !os(watchOS)
             return UIDevice.current.systemVersion
-        #elseif os(macOS)
+        #elseif os(macOS) || os(watchOS)
             let version = ProcessInfo.processInfo.operatingSystemVersion
             return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
         #else
