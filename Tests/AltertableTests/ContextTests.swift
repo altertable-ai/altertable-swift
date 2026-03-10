@@ -9,26 +9,71 @@ import XCTest
 final class ContextTests: XCTestCase {
     func testGetSystemPropertiesContainsRequiredKeys() {
         let props = Context.getSystemProperties()
-        XCTAssertNotNil(props["$lib"], "Should include $lib")
-        XCTAssertNotNil(props["$lib_version"], "Should include $lib_version")
-        XCTAssertNotNil(props["os"], "Should include os")
-        XCTAssertNotNil(props["os_version"], "Should include os_version")
-        XCTAssertNotNil(props["manufacturer"], "Should include manufacturer")
-        XCTAssertNotNil(props["model"], "Should include model")
+        XCTAssertNotNil(props[SDKConstants.propertyLib], "Should include $lib")
+        XCTAssertNotNil(props[SDKConstants.propertyLibVersion], "Should include $lib_version")
+        XCTAssertNotNil(props[SDKConstants.propertyOs], "Should include os")
+        XCTAssertNotNil(props[SDKConstants.propertyOsVersion], "Should include os_version")
+        XCTAssertNotNil(props[SDKConstants.propertyDeviceManufacturer], "Should include device_manufacturer")
+        XCTAssertNotNil(props[SDKConstants.propertyDeviceModel], "Should include device_model")
     }
 
     func testLibNameMatchesSDKConstant() {
         let props = Context.getSystemProperties()
-        XCTAssertEqual(props["$lib"]?.value as? String, SDKConstants.libraryName)
+        XCTAssertEqual(props[SDKConstants.propertyLib], .string(SDKConstants.libraryName))
     }
 
     func testLibVersionMatchesSDKConstant() {
         let props = Context.getSystemProperties()
-        XCTAssertEqual(props["$lib_version"]?.value as? String, SDKConstants.libraryVersion)
+        XCTAssertEqual(props[SDKConstants.propertyLibVersion], .string(SDKConstants.libraryVersion))
     }
 
     func testManufacturerIsApple() {
         XCTAssertEqual(Context.deviceManufacturer, "Apple")
+    }
+
+    func testDeviceModelIsNotEmpty() {
+        XCTAssertFalse(Context.deviceModel.isEmpty)
+        XCTAssertNotEqual(Context.deviceModel, "unknown")
+    }
+
+    func testDeviceNameIsNotEmpty() {
+        XCTAssertFalse(Context.deviceName.isEmpty)
+        XCTAssertNotEqual(Context.deviceName, "unknown")
+    }
+
+    func testDeviceTypeIsNotEmpty() {
+        XCTAssertFalse(Context.deviceType.isEmpty)
+        XCTAssertNotEqual(Context.deviceType, "unknown")
+    }
+
+    func testDeviceNameAndTypeInSystemProperties() {
+        let props = Context.getSystemProperties()
+        XCTAssertNotNil(props[SDKConstants.propertyDeviceName], "Should include $device")
+        XCTAssertNotNil(props[SDKConstants.propertyDeviceType], "Should include $device_type")
+    }
+
+    func testAppPropertiesInSystemProperties() {
+        let props = Context.getSystemProperties()
+        XCTAssertNotNil(props[SDKConstants.propertyAppName], "Should include $app_name")
+        XCTAssertNotNil(props[SDKConstants.propertyAppVersion], "Should include $app_version")
+        XCTAssertNotNil(props[SDKConstants.propertyAppBuild], "Should include $app_build")
+        XCTAssertNotNil(props[SDKConstants.propertyAppNamespace], "Should include $app_namespace")
+    }
+
+    func testAppNameIsNotEmpty() {
+        XCTAssertFalse(Context.appName.isEmpty)
+    }
+
+    func testAppVersionIsNotEmpty() {
+        XCTAssertFalse(Context.appVersion.isEmpty)
+    }
+
+    func testAppBuildIsNotEmpty() {
+        XCTAssertFalse(Context.appBuild.isEmpty)
+    }
+
+    func testAppNamespaceIsNotEmpty() {
+        XCTAssertFalse(Context.appNamespace.isEmpty)
     }
 
     func testOsNameIsNotEmpty() {
@@ -38,5 +83,32 @@ final class ContextTests: XCTestCase {
 
     func testOsVersionIsNotEmpty() {
         XCTAssertFalse(Context.osVersion.isEmpty)
+        #if os(iOS) || os(tvOS) || os(macOS) || os(watchOS)
+        XCTAssertNotEqual(Context.osVersion, "unknown", "os_version must not be unknown on Apple platforms")
+        XCTAssertTrue(Context.osVersion.first?.isNumber ?? false, "os_version should be a version string (e.g. 14.0)")
+        #else
+        XCTAssertEqual(Context.osVersion, "unknown")
+        #endif
+    }
+
+    func testViewportInSystemProperties() {
+        let props = Context.getSystemProperties()
+        #if os(iOS) || os(tvOS) || os(macOS) || os(watchOS)
+        XCTAssertNotNil(props[SDKConstants.propertyViewport], "Should include $viewport on Apple platforms")
+        if case let .string(viewport) = props[SDKConstants.propertyViewport] {
+            XCTAssertFalse(viewport.isEmpty)
+            let components = viewport.split(separator: "x")
+            XCTAssertEqual(components.count, 2, "Viewport should be in format 'widthxheight'")
+            if components.count == 2,
+               let width = Int(components[0]),
+               let height = Int(components[1])
+            {
+                XCTAssertGreaterThan(width, 0)
+                XCTAssertGreaterThan(height, 0)
+            }
+        }
+        #else
+        XCTAssertNil(props[SDKConstants.propertyViewport], "$viewport should be absent on unsupported platforms")
+        #endif
     }
 }

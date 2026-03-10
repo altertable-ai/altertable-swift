@@ -8,14 +8,24 @@ import Foundation
     import FoundationNetworking
 #endif
 
-enum APIError: Error {
+enum APIError: LocalizedError, Sendable {
     case invalidURL
     case httpError(Int)
     case networkError(Error)
-    case decodingError(Error)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "Invalid API URL"
+        case let .httpError(code):
+            return "HTTP error \(code)"
+        case let .networkError(error):
+            return "Network error: \(error.localizedDescription)"
+        }
+    }
 }
 
-class Requester {
+final class Requester {
     private let apiKey: String
     private let session: URLSession
 
@@ -27,18 +37,7 @@ class Requester {
         set { delayQueue.sync { _retryBaseDelay = newValue } }
     }
 
-    /// ConfigRef exists so that Altertable can hold a reference to it for the
-    /// URLSession timeout snapshot taken at init time. Requester does NOT read it
-    /// after init — all config values needed per-request are passed explicitly to
-    /// avoid cross-thread access on arbitrary URLSession callback threads.
-    final class ConfigRef {
-        var config: AltertableConfig
-        init(_ config: AltertableConfig) {
-            self.config = config
-        }
-    }
-
-    init(apiKey: String, configRef: ConfigRef, session: URLSession? = nil) {
+    init(apiKey: String, requestTimeout: TimeInterval, session: URLSession? = nil) {
         self.apiKey = apiKey
 
         if let session {
@@ -47,8 +46,8 @@ class Requester {
             let sessionConfig = URLSessionConfiguration.default
             // Snapshot timeout at init time — safe because init runs on the
             // Altertable serial queue before any concurrent access begins.
-            sessionConfig.timeoutIntervalForRequest = configRef.config.requestTimeout
-            sessionConfig.timeoutIntervalForResource = configRef.config.requestTimeout
+            sessionConfig.timeoutIntervalForRequest = requestTimeout
+            sessionConfig.timeoutIntervalForResource = requestTimeout
             self.session = URLSession(configuration: sessionConfig)
         }
     }
@@ -58,28 +57,17 @@ class Requester {
     // `baseURL` is passed by the caller (Altertable's serial queue) so this class
     // never reads shared config from an arbitrary thread.
 
-    func send(_ payload: TrackPayload, baseURL: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        sendRequest(endpoint: "/track", baseURL: baseURL, payload: payload, completion: completion)
-    }
-
-    func send(_ payload: IdentifyPayload, baseURL: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        sendRequest(endpoint: "/identify", baseURL: baseURL, payload: payload, completion: completion)
-    }
-
-    func send(_ payload: AliasPayload, baseURL: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        sendRequest(endpoint: "/alias", baseURL: baseURL, payload: payload, completion: completion)
+    func send<P: APIPayload>(_ payload: P, baseURL: URL, completion: @escaping (Result<Void, Error>) -> Void) {
+        sendRequest(endpoint: P.endpoint, baseURL: baseURL, payload: payload, completion: completion)
     }
 
     private func sendRequest(
         endpoint: String,
-        baseURL: String,
+        baseURL: URL,
         payload: some Encodable,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
-        guard let url = URL(string: "\(baseURL)\(endpoint)") else {
-            completion(.failure(APIError.invalidURL))
-            return
-        }
+        let url = baseURL.appendingPathComponent(endpoint)
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

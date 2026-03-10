@@ -4,13 +4,14 @@ excluded:
 disabled_rules:
   - trailing_comma
   - opening_brace
+  - todo
 
 identifier_name:
   excluded:
     - id
 
 file_length:
-  warning: 500
+  warning: 1000
 
 type_body_length:
-  warning: 400
+  warning: 500

@@ -5,33 +5,33 @@
 
 import Foundation
 
-public enum ValidationError: LocalizedError, Equatable {
+enum ValidationError: LocalizedError, Equatable, Sendable {
     case emptyUserId
     case reservedUserId(String)
     case userIdTooLong
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .emptyUserId:
-            return "User ID cannot be empty or contain only whitespace."
+            return "Enter a user ID"
         case let .reservedUserId(id):
-            return "User ID \"\(id)\" is a reserved identifier and cannot be used."
+            return "The user ID \"\(id)\" is reserved. Choose a different ID."
         case .userIdTooLong:
-            return "User ID is too long (max 1024 characters)."
+            return "User ID must be 1024 characters or less. Shorten your ID."
         }
     }
 }
 
-class Validator {
+enum Validator {
     /// Case-insensitive reserved IDs
-    static let reservedIds = [
+    static let reservedIds: Set<String> = [
         "anonymous_id", "anonymous", "distinct_id", "distinctid", "false", "guest",
         "id", "not_authenticated", "true", "undefined", "user_id", "user",
         "visitor_id", "visitor",
     ]
 
     /// Case-sensitive reserved IDs
-    static let reservedIdsExact = [
+    static let reservedIdsExact: Set<String> = [
         "[object Object]", "0", "NaN", "none", "None", "null",
     ]
 

@@ -5,10 +5,22 @@
 
 import Foundation
 
-public class AltertableConfig {
+public struct AltertableConfig {
+    // MARK: - Defaults
+
+    public static let defaultBaseURL = URL(string: "https://api.altertable.ai")!
+    public static let defaultEnvironment = "production"
+    public static let defaultTrackingConsent: TrackingConsentState = .granted
+    public static let defaultDebug = false
+    public static let defaultRequestTimeout: TimeInterval = 10.0
+    public static let defaultFlushOnBackground = true
+    public static let defaultCaptureScreenViews = true
+
+    // MARK: - Properties
+
     /// The base URL of the Altertable API.
     /// - Default: `"https://api.altertable.ai"`
-    public var baseURL: String
+    public var baseURL: URL
 
     /// The environment of the application.
     /// - Default: `"production"`
@@ -32,21 +44,30 @@ public class AltertableConfig {
 
     /// The timeout interval for outgoing HTTP requests.
     /// - Default: `10` seconds
+    /// - Note: This property can only be set at initialization time. Changes via `configure()` are ignored.
     public var requestTimeout: TimeInterval
 
     /// Whether to flush the event queue when the app moves to the background.
     /// - Default: `true`
+    /// - Note: This property can only be set at initialization time. Changes via `configure()` are ignored.
     public var flushOnBackground: Bool
 
+    /// Automatically track screen views.
+    /// When enabled, the SDK automatically tracks screen views for UIKit view controllers
+    /// and provides a SwiftUI view modifier for manual tracking.
+    /// - Default: `true`
+    public var captureScreenViews: Bool
+
     public init(
-        baseURL: String = SDKConstants.defaultBaseURL,
-        environment: String = SDKConstants.defaultEnvironment,
-        trackingConsent: TrackingConsentState = SDKConstants.defaultTrackingConsent,
+        baseURL: URL = AltertableConfig.defaultBaseURL,
+        environment: String = AltertableConfig.defaultEnvironment,
+        trackingConsent: TrackingConsentState = AltertableConfig.defaultTrackingConsent,
         release: String? = nil,
         onError: ((Error) -> Void)? = nil,
-        debug: Bool = SDKConstants.defaultDebug,
-        requestTimeout: TimeInterval = SDKConstants.mobileRequestTimeout,
-        flushOnBackground: Bool = SDKConstants.defaultFlushOnBackground
+        debug: Bool = AltertableConfig.defaultDebug,
+        requestTimeout: TimeInterval = AltertableConfig.defaultRequestTimeout,
+        flushOnBackground: Bool = AltertableConfig.defaultFlushOnBackground,
+        captureScreenViews: Bool = AltertableConfig.defaultCaptureScreenViews
     ) {
         self.baseURL = baseURL
         self.environment = environment
@@ -56,26 +77,13 @@ public class AltertableConfig {
         self.debug = debug
         self.requestTimeout = requestTimeout
         self.flushOnBackground = flushOnBackground
+        self.captureScreenViews = captureScreenViews
     }
 }
 
-public class PartialAltertableConfig {
-    /// The tracking consent state to apply.
-    public var trackingConsent: TrackingConsentState?
-
-    /// Whether to enable debug logging.
-    public var debug: Bool?
-
-    /// The environment to apply.
-    public var environment: String?
-
-    public init(
-        trackingConsent: TrackingConsentState? = nil,
-        debug: Bool? = nil,
-        environment: String? = nil
-    ) {
-        self.trackingConsent = trackingConsent
-        self.debug = debug
-        self.environment = environment
-    }
+public enum TrackingConsentState: String, Codable, Sendable {
+    case granted
+    case denied
+    case pending
+    case dismissed
 }

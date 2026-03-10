@@ -5,7 +5,7 @@
 
 import Foundation
 
-class QueueStorage {
+final class QueueStorage {
     private let fileURL: URL
     private let logger: Logger
 

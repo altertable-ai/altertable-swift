@@ -2,9 +2,13 @@ name: Test
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
@@ -19,8 +23,22 @@ jobs:
 
   test:
     name: Swift Test
-    runs-on: ubuntu-latest
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
 
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Resolve Dependencies
+        run: swift package resolve
+
+      - name: Run Tests
+        run: swift test
+
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
     services:
       altertable:
         image: ghcr.io/altertable-ai/altertable-mock:latest
@@ -38,16 +56,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Verify Package.swift
-        run: |
-          if [ ! -f "Package.swift" ]; then
-            echo "::error::Package.swift not found. Ensure this workflow runs on the correct branch."
-            exit 1
-          fi
-          
+
       - name: Resolve Dependencies
         run: swift package resolve
 
-      - name: Run Tests
-        run: swift test
+      - name: Run Integration Tests
+        run: swift test --filter IntegrationTests

@@ -72,7 +72,7 @@ final class QueueTests: XCTestCase {
             return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
         }
 
-        client2.configure(PartialAltertableConfig(trackingConsent: .granted))
+        client2.configure { $0.trackingConsent = .granted }
 
         waitForExpectations(timeout: 1.0)
     }
@@ -83,7 +83,7 @@ final class QueueTests: XCTestCase {
         let maxSize = 3
         let config = AltertableConfig(trackingConsent: .pending)
         let client = Altertable(apiKey: "pk_test_drop", config: config, session: session)
-        client.setMaxQueueSize(maxSize)
+        client.maxQueueSize = maxSize
 
         // Enqueue maxSize + 2 events; the two oldest should be dropped.
         let totalEnqueued = maxSize + 2
@@ -107,7 +107,7 @@ final class QueueTests: XCTestCase {
             return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
         }
 
-        client.configure(PartialAltertableConfig(trackingConsent: .granted))
+        client.configure { $0.trackingConsent = .granted }
         waitForExpectations(timeout: 2.0)
 
         XCTAssertEqual(flushedEvents.count, maxSize, "Queue should be capped at maxQueueSize")
