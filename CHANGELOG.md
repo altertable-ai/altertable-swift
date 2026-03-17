@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1](https://github.com/altertable-ai/altertable-swift/compare/altertable-swift-v0.1.0...altertable-swift-v0.1.1) (2026-03-17)
+
+
+### Bug Fixes
+
+* send prefixed built-in properties ([#28](https://github.com/altertable-ai/altertable-swift/issues/28)) ([2a5761a](https://github.com/altertable-ai/altertable-swift/commit/2a5761a6cd0f9c03db9759519a97e31575151333))
+
 ## [0.1.0](https://github.com/altertable-ai/altertable-swift/releases/tag/v0.1.0) (2026-03-10)
 
 Initial release of the official Swift SDK for Altertable Product Analytics! 🚀
