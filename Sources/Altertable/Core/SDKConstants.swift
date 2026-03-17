@@ -33,22 +33,21 @@ enum SDKConstants {
     static let eventScreenView = "$screen"
 
     // Properties
+    static let propertyAppBuild = "$app_build"
+    static let propertyAppName = "$app_name"
+    static let propertyAppNamespace = "$app_namespace"
+    static let propertyAppVersion = "$app_version"
+    static let propertyDeviceManufacturer = "$device_manufacturer"
+    static let propertyDeviceModel = "$device_model"
+    static let propertyDeviceName = "$device"
+    static let propertyDeviceType = "$device_type"
     static let propertyLib = "$lib"
     static let propertyLibVersion = "$lib_version"
+    static let propertyOs = "$os"
+    static let propertyOsVersion = "$os_version"
     static let propertyRelease = "$release"
-    static let propertyAppName = "app_name" // FIXME: prefix with $ once supported by the API
-    static let propertyAppVersion = "app_version" // FIXME: prefix with $ once supported by the API
-    static let propertyAppBuild = "app_build" // FIXME: prefix with $ once supported by the API
-    static let propertyAppNamespace = "app_namespace" // FIXME: prefix with $ once supported by the API
+    static let propertyScreenName = "$screen_name"
     static let propertyViewport = "$viewport"
-    static let propertyScreenName = "screen_name" // FIXME: prefix with $ once supported by the API 
-    static let propertyOs = "os" // FIXME: prefix with $ once supported by the API
-    static let propertyOsVersion = "os_version" // FIXME: prefix with $ once supported by the API
-    // FIXME: prefix with $ once supported by the API
-    static let propertyDeviceManufacturer = "device_manufacturer"
-    static let propertyDeviceModel = "device_model" // FIXME: prefix with $ once supported by the API
-    static let propertyDeviceName = "device" // FIXME: prefix with $ once supported by the API
-    static let propertyDeviceType = "device_type" // FIXME: prefix with $ once supported by the API
 
     /// Limits
     static let maxQueueSize = 1000
