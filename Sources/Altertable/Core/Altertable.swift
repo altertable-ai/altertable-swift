@@ -37,6 +37,7 @@ public final class Altertable: @unchecked Sendable {
 
     /// NotificationCenter token for lifecycle hooks
     private var backgroundObserver: AnyObject?
+    private var flushTimer: DispatchSourceTimer?
 
     private var screenViewIntegration: ScreenViewIntegration?
 
@@ -99,6 +100,7 @@ public final class Altertable: @unchecked Sendable {
         eventQueue = queueStorage.load()
 
         setupLifecycleHooks()
+        setupPeriodicFlush()
         setupScreenViews(enabled: internalConfig.captureScreenViews)
     }
 
@@ -106,6 +108,8 @@ public final class Altertable: @unchecked Sendable {
         if let token = backgroundObserver {
             NotificationCenter.default.removeObserver(token)
         }
+        flushTimer?.cancel()
+        flushTimer = nil
         // Remove any waiting callbacks if we never held ownership
         ScreenViewIntegration.dequeueCallback(ifOwner: self)
         // Release screen view integration ownership
@@ -205,6 +209,7 @@ public final class Altertable: @unchecked Sendable {
             }
 
             let payload = IdentifyPayload(
+                timestamp: Date().iso8601String(),
                 environment: config.environment,
                 deviceId: deviceId,
                 distinctId: distinctId,
@@ -235,6 +240,7 @@ public final class Altertable: @unchecked Sendable {
             }
 
             let payload = AliasPayload(
+                timestamp: Date().iso8601String(),
                 environment: config.environment,
                 deviceId: deviceId,
                 distinctId: distinctId,
@@ -264,6 +270,7 @@ public final class Altertable: @unchecked Sendable {
             }
 
             let payload = IdentifyPayload(
+                timestamp: Date().iso8601String(),
                 environment: config.environment,
                 deviceId: deviceId,
                 distinctId: distinctId,
@@ -320,6 +327,7 @@ public final class Altertable: @unchecked Sendable {
             // Snapshot init-only fields that cannot be changed after initialization
             let frozenTimeout = config.requestTimeout
             let frozenFlush = config.flushOnBackground
+            let previousFlushInterval = config.flushInterval
 
             updates(&config)
 
@@ -337,6 +345,10 @@ public final class Altertable: @unchecked Sendable {
                     eventQueue.removeAll()
                     queueStorage.save(eventQueue)
                 }
+            }
+
+            if config.flushInterval != previousFlushInterval {
+                setupPeriodicFlush()
             }
 
             // Handle debug changes
@@ -388,14 +400,14 @@ public final class Altertable: @unchecked Sendable {
         }
 
         eventQueue.append(request)
-        // Persist only when consent is pending (events may survive app restart before
-        // consent is granted). When consent is granted, _flush() clears the queue
-        // and persists the empty state immediately after, so per-enqueue writes are
-        // redundant and expensive for high-frequency tracking.
         if config.trackingConsent != .granted {
             queueStorage.save(eventQueue)
+            return
         }
-        _flush()
+
+        if eventQueue.count >= config.flushAt {
+            _flush()
+        }
     }
 
     /// Queue-isolated flush implementation. Must only be called from within `queue`.
@@ -407,34 +419,31 @@ public final class Altertable: @unchecked Sendable {
         eventQueue.removeAll()
         queueStorage.save(eventQueue)
 
-        for request in batch {
-            sendRequest(request)
+        sendBatches(batch)
+    }
+
+    private func sendBatches(_ requests: [QueuedRequest]) {
+        let tracks = requests.compactMap { request -> TrackPayload? in
+            if case let .track(payload) = request { return payload }
+            return nil
         }
+        let identifies = requests.compactMap { request -> IdentifyPayload? in
+            if case let .identify(payload) = request { return payload }
+            return nil
+        }
+        let aliases = requests.compactMap { request -> AliasPayload? in
+            if case let .alias(payload) = request { return payload }
+            return nil
+        }
+
+        chunked(tracks, size: config.maxBatchSize).forEach { sendTrackBatch($0) }
+        chunked(identifies, size: config.maxBatchSize).forEach { sendIdentifyBatch($0) }
+        chunked(aliases, size: config.maxBatchSize).forEach { sendAliasBatch($0) }
     }
 
     private func sendRequest(_ request: QueuedRequest) {
-        // Snapshot baseURL here, on the serial queue, before handing off to Requester
-        // which may execute on arbitrary URLSession callback threads.
         let baseURL = config.baseURL
-
-        let completion: (Result<Void, Error>) -> Void = { [weak self] result in
-            guard let self else { return }
-            switch result {
-            case .success:
-                break
-            case let .failure(error):
-                self.queue.async {
-                    // Only re-enqueue transient failures (handled by Requester's retry
-                    // logic for 5xx/429/network errors). By the time completion(.failure)
-                    // is called here, Requester has already exhausted its retries, so we
-                    // do not attempt to re-enqueue — doing so would cause an infinite loop
-                    // for permanent client errors (4xx).
-                    // Skip if consent was revoked while the request was in flight.
-                    guard self.config.trackingConsent != .denied else { return }
-                    self.config.onError?(error)
-                }
-            }
-        }
+        let completion = makeCompletion(requeue: [request])
 
         switch request {
         case let .track(payload):
@@ -443,6 +452,48 @@ public final class Altertable: @unchecked Sendable {
             requester.send(payload, baseURL: baseURL, completion: completion)
         case let .alias(payload):
             requester.send(payload, baseURL: baseURL, completion: completion)
+        }
+    }
+
+    private func sendTrackBatch(_ payloads: [TrackPayload]) {
+        guard !payloads.isEmpty else { return }
+        let requests = payloads.map { QueuedRequest.track($0) }
+        requester.sendBatch(payloads, baseURL: config.baseURL, completion: makeCompletion(requeue: requests))
+    }
+
+    private func sendIdentifyBatch(_ payloads: [IdentifyPayload]) {
+        guard !payloads.isEmpty else { return }
+        let requests = payloads.map { QueuedRequest.identify($0) }
+        requester.sendBatch(payloads, baseURL: config.baseURL, completion: makeCompletion(requeue: requests))
+    }
+
+    private func sendAliasBatch(_ payloads: [AliasPayload]) {
+        guard !payloads.isEmpty else { return }
+        let requests = payloads.map { QueuedRequest.alias($0) }
+        requester.sendBatch(payloads, baseURL: config.baseURL, completion: makeCompletion(requeue: requests))
+    }
+
+    private func makeCompletion(requeue requests: [QueuedRequest]) -> (Result<Void, Error>) -> Void {
+        { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success:
+                break
+            case let .failure(error):
+                self.queue.async {
+                    guard self.config.trackingConsent != .denied else { return }
+                    self.config.onError?(error)
+                    self.eventQueue.append(contentsOf: requests)
+                    self.queueStorage.save(self.eventQueue)
+                }
+            }
+        }
+    }
+
+    private func chunked<T>(_ array: [T], size: Int) -> [[T]] {
+        guard size > 0 else { return [array] }
+        return stride(from: 0, to: array.count, by: size).map {
+            Array(array[$0 ..< Swift.min($0 + size, array.count)])
         }
     }
 
@@ -464,6 +515,18 @@ public final class Altertable: @unchecked Sendable {
 
         eventQueue.removeAll()
         queueStorage.save(eventQueue)
+    }
+
+    private func setupPeriodicFlush() {
+        flushTimer?.cancel()
+
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + config.flushInterval, repeating: config.flushInterval)
+        timer.setEventHandler { [weak self] in
+            self?._flush()
+        }
+        timer.resume()
+        flushTimer = timer
     }
 
     private func setupLifecycleHooks() {

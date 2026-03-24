@@ -216,4 +216,124 @@ final class IntegrationTests: XCTestCase {
 
         wait(for: [noError], timeout: 5.0)
     }
+
+    // MARK: - Batching Behavior
+
+    func testBatchThresholdFlushSucceeds() {
+        let noError = expectation(description: "No error after batch flush")
+        noError.isInverted = true
+
+        let config = AltertableConfig(
+            baseURL: IntegrationTests.mockBaseURL,
+            environment: IntegrationTests.environment,
+            onError: { error in
+                XCTFail("Unexpected SDK error: \(error)")
+                noError.fulfill()
+            },
+            flushAt: 3
+        )
+        let client = Altertable(apiKey: IntegrationTests.apiKey, config: config)
+        client.setRetryBaseDelay(0.1)
+
+        client.track(event: "batch_threshold_0")
+        client.track(event: "batch_threshold_1")
+        client.track(event: "batch_threshold_2")
+
+        wait(for: [noError], timeout: 5.0)
+    }
+
+    func testBatchMaxBatchSizeChunkingSucceeds() {
+        let noError = expectation(description: "No error with chunked batch")
+        noError.isInverted = true
+
+        let config = AltertableConfig(
+            baseURL: IntegrationTests.mockBaseURL,
+            environment: IntegrationTests.environment,
+            onError: { error in
+                XCTFail("Unexpected SDK error: \(error)")
+                noError.fulfill()
+            },
+            flushAt: 100,
+            maxBatchSize: 5
+        )
+        let client = Altertable(apiKey: IntegrationTests.apiKey, config: config)
+        client.setRetryBaseDelay(0.1)
+
+        for i in 0 ..< 12 {
+            client.track(event: "chunked_event_\(i)", properties: ["index": JSONValue(i)])
+        }
+
+        wait(for: [noError], timeout: 5.0)
+    }
+
+    func testBatchMixedEventTypesSucceeds() {
+        let noError = expectation(description: "No error with mixed types")
+        noError.isInverted = true
+
+        let config = AltertableConfig(
+            baseURL: IntegrationTests.mockBaseURL,
+            environment: IntegrationTests.environment,
+            onError: { error in
+                XCTFail("Unexpected SDK error: \(error)")
+                noError.fulfill()
+            },
+            flushAt: 100
+        )
+        let client = Altertable(apiKey: IntegrationTests.apiKey, config: config)
+        client.setRetryBaseDelay(0.1)
+
+        client.identify(userId: "user_mixed_batch", traits: ["source": JSONValue("integration")])
+        client.track(event: "mixed_track_1")
+        client.track(event: "mixed_track_2")
+        client.updateTraits(["plan": JSONValue("pro")])
+        client.track(event: "mixed_track_3")
+
+        wait(for: [noError], timeout: 5.0)
+    }
+
+    func testBatchPeriodicFlushSucceeds() {
+        let noError = expectation(description: "No error with periodic flush")
+        noError.isInverted = true
+
+        let config = AltertableConfig(
+            baseURL: IntegrationTests.mockBaseURL,
+            environment: IntegrationTests.environment,
+            onError: { error in
+                XCTFail("Unexpected SDK error: \(error)")
+                noError.fulfill()
+            },
+            flushAt: 100,
+            flushInterval: 2
+        )
+        let client = Altertable(apiKey: IntegrationTests.apiKey, config: config)
+        client.setRetryBaseDelay(0.1)
+
+        client.track(event: "periodic_flush_event")
+
+        wait(for: [noError], timeout: 5.0)
+    }
+
+    func testBatchManualFlushSucceeds() {
+        let noError = expectation(description: "No error with manual flush")
+        noError.isInverted = true
+
+        let config = AltertableConfig(
+            baseURL: IntegrationTests.mockBaseURL,
+            environment: IntegrationTests.environment,
+            trackingConsent: .pending,
+            onError: { error in
+                XCTFail("Unexpected SDK error: \(error)")
+                noError.fulfill()
+            },
+            flushAt: 100
+        )
+        let client = Altertable(apiKey: IntegrationTests.apiKey, config: config)
+        client.setRetryBaseDelay(0.1)
+
+        client.track(event: "manual_flush_queued")
+        client.configure { $0.trackingConsent = .granted }
+        client.flush()
+
+        wait(for: [noError], timeout: 5.0)
+    }
 }

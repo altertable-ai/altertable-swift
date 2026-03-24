@@ -33,6 +33,11 @@ final class ScreenViewTests: XCTestCase {
         MockURLProtocol.lastRequest = nil
     }
 
+    private func makeClient(apiKey: String = "pk_test_123") -> Altertable {
+        let config = AltertableConfig(flushAt: 1, flushInterval: 3600)
+        return Altertable(apiKey: apiKey, config: config, session: session)
+    }
+
     override func tearDown() {
         // Release ownership if client exists
         if let client = client {
@@ -59,10 +64,23 @@ final class ScreenViewTests: XCTestCase {
         return (response, nil)
     }
 
+    private func extractFirstPayload(from body: Data?) -> [String: Any]? {
+        guard let body = body,
+              let json = try? JSONSerialization.jsonObject(with: body)
+        else { return nil }
+        if let single = json as? [String: Any] {
+            return single
+        }
+        if let array = json as? [[String: Any]], let first = array.first {
+            return first
+        }
+        return nil
+    }
+
     // MARK: - screen() method tests
 
     func testScreenMethodSendsCorrectEvent() {
-        client = Altertable(apiKey: "pk_test_123", session: session)
+        client = makeClient()
 
         let expectation = expectation(description: "Screen view event sent")
 
@@ -72,11 +90,10 @@ final class ScreenViewTests: XCTestCase {
             XCTAssertEqual(url.path, "/track")
             XCTAssertEqual(request.httpMethod, "POST")
 
-            if let body = request.httpBody {
-                let json = try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
-                XCTAssertEqual(json?["event"] as? String, SDKConstants.eventScreenView)
+            if let json = extractFirstPayload(from: request.httpBody) {
+                XCTAssertEqual(json["event"] as? String, SDKConstants.eventScreenView)
 
-                let properties = json?["properties"] as? [String: Any]
+                let properties = json["properties"] as? [String: Any]
                 XCTAssertEqual(properties?[SDKConstants.propertyScreenName] as? String, "TestScreen")
                 XCTAssertEqual(properties?["custom_prop"] as? String, "custom_value")
             } else {
@@ -93,18 +110,17 @@ final class ScreenViewTests: XCTestCase {
     }
 
     func testScreenMethodWithDefaultProperties() {
-        client = Altertable(apiKey: "pk_test_123", session: session)
+        client = makeClient()
 
         let expectation = expectation(description: "Screen view event sent")
 
         MockURLProtocol.requestHandler = { [self] request in
             guard let url = request.url else { throw URLError(.badURL) }
 
-            if let body = request.httpBody {
-                let json = try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
-                XCTAssertEqual(json?["event"] as? String, SDKConstants.eventScreenView)
+            if let json = extractFirstPayload(from: request.httpBody) {
+                XCTAssertEqual(json["event"] as? String, SDKConstants.eventScreenView)
 
-                let properties = json?["properties"] as? [String: Any]
+                let properties = json["properties"] as? [String: Any]
                 XCTAssertEqual(properties?[SDKConstants.propertyScreenName] as? String, "HomeScreen")
                 // Should include system properties
                 XCTAssertNotNil(properties?[SDKConstants.propertyLib])
@@ -148,9 +164,8 @@ final class ScreenViewTests: XCTestCase {
 
             var capturedScreenNames: [String] = []
             MockURLProtocol.requestHandler = { request in
-                if let body = request.httpBody {
-                    let json = try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
-                    if let properties = json?["properties"] as? [String: Any],
+                if let json = self.extractFirstPayload(from: request.httpBody) {
+                    if let properties = json["properties"] as? [String: Any],
                        let screenName = properties[SDKConstants.propertyScreenName] as? String
                     {
                         capturedScreenNames.append(screenName)
@@ -185,9 +200,9 @@ final class ScreenViewTests: XCTestCase {
             XCTAssertTrue(capturedScreenNames.contains("TableView"), "Should NOT strip View from TableView")
         }
 
-        func testContainerViewControllersAreSkipped() {
-            let config = AltertableConfig(captureScreenViews: true)
-            client = Altertable(apiKey: "pk_test_containers", config: config, session: session)
+    func testContainerViewControllersAreSkipped() {
+        let config = AltertableConfig(captureScreenViews: true, flushAt: 1, flushInterval: 3600)
+        client = Altertable(apiKey: "pk_test_containers", config: config, session: session)
 
             let noEventExpectation = expectation(description: "No screen events from container VCs")
             noEventExpectation.isInverted = true
@@ -208,7 +223,7 @@ final class ScreenViewTests: XCTestCase {
     // MARK: - Configuration tests
 
     func testCaptureScreenViewsDisabled() {
-        let config = AltertableConfig(captureScreenViews: false)
+        let config = AltertableConfig(captureScreenViews: false, flushAt: 1, flushInterval: 3600)
         client = Altertable(apiKey: "pk_test_123", config: config, session: session)
 
         // When disabled, the integration should not be installed
@@ -226,7 +241,7 @@ final class ScreenViewTests: XCTestCase {
     }
 
     func testCaptureScreenViewsEnabled() {
-        let config = AltertableConfig(captureScreenViews: true)
+        let config = AltertableConfig(captureScreenViews: true, flushAt: 1, flushInterval: 3600)
         client = Altertable(apiKey: "pk_test_123", config: config, session: session)
 
         #if canImport(UIKit) && !os(watchOS)
@@ -241,7 +256,7 @@ final class ScreenViewTests: XCTestCase {
     }
 
     func testConfigureCaptureScreenViews() {
-        client = Altertable(apiKey: "pk_test_123", session: session)
+        client = makeClient()
 
         #if canImport(UIKit) && !os(watchOS)
             // Initially should be disabled by default on UIKit platforms
@@ -308,7 +323,7 @@ final class ScreenViewTests: XCTestCase {
 
     #if canImport(UIKit) && !os(watchOS)
         func testDisableAtRuntimeStopsTracking() {
-            let config = AltertableConfig(captureScreenViews: true)
+            let config = AltertableConfig(captureScreenViews: true, flushAt: 1, flushInterval: 3600)
             client = Altertable(apiKey: "pk_test_disable", config: config, session: session)
 
             // Create a test view controller
@@ -567,17 +582,16 @@ final class ScreenViewTests: XCTestCase {
 
     #if canImport(SwiftUI)
         func testSwiftUIModifierWithExplicitClient() {
-            client = Altertable(apiKey: "pk_test_swiftui", session: session)
+            client = makeClient(apiKey: "pk_test_swiftui")
 
             let expectation = expectation(description: "SwiftUI screen view tracked")
             MockURLProtocol.requestHandler = { [self] request in
                 guard let url = request.url else { throw URLError(.badURL) }
 
-                if let body = request.httpBody {
-                    let json = try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
-                    XCTAssertEqual(json?["event"] as? String, SDKConstants.eventScreenView)
+                if let json = extractFirstPayload(from: request.httpBody) {
+                    XCTAssertEqual(json["event"] as? String, SDKConstants.eventScreenView)
 
-                    let properties = json?["properties"] as? [String: Any]
+                    let properties = json["properties"] as? [String: Any]
                     XCTAssertEqual(properties?[SDKConstants.propertyScreenName] as? String, "TestView")
                 }
 
@@ -607,11 +621,10 @@ final class ScreenViewTests: XCTestCase {
                 MockURLProtocol.requestHandler = { [self] request in
                     guard let url = request.url else { throw URLError(.badURL) }
 
-                    if let body = request.httpBody {
-                        let json = try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
-                        XCTAssertEqual(json?["event"] as? String, SDKConstants.eventScreenView)
+                    if let json = extractFirstPayload(from: request.httpBody) {
+                        XCTAssertEqual(json["event"] as? String, SDKConstants.eventScreenView)
 
-                        let properties = json?["properties"] as? [String: Any]
+                        let properties = json["properties"] as? [String: Any]
                         XCTAssertEqual(properties?[SDKConstants.propertyScreenName] as? String, "FallbackView")
                     }
 

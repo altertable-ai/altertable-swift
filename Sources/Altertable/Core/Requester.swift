@@ -61,6 +61,18 @@ final class Requester {
         sendRequest(endpoint: P.endpoint, baseURL: baseURL, payload: payload, completion: completion)
     }
 
+    func sendBatch<P: APIPayload>(
+        _ payloads: [P],
+        baseURL: URL,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        guard !payloads.isEmpty else {
+            completion(.success(()))
+            return
+        }
+        sendRequest(endpoint: P.endpoint, baseURL: baseURL, payload: payloads, completion: completion)
+    }
+
     private func sendRequest(
         endpoint: String,
         baseURL: URL,

@@ -15,6 +15,9 @@ public struct AltertableConfig {
     public static let defaultRequestTimeout: TimeInterval = 10.0
     public static let defaultFlushOnBackground = true
     public static let defaultCaptureScreenViews = true
+    public static let defaultFlushAt = 20
+    public static let defaultFlushInterval: TimeInterval = 30
+    public static let defaultMaxBatchSize = 50
 
     // MARK: - Properties
 
@@ -58,6 +61,18 @@ public struct AltertableConfig {
     /// - Default: `true`
     public var captureScreenViews: Bool
 
+    /// Number of queued events that triggers an automatic flush.
+    /// - Default: `20`
+    public var flushAt: Int
+
+    /// Periodic flush interval in seconds.
+    /// - Default: `30`
+    public var flushInterval: TimeInterval
+
+    /// Maximum events in a single batch request.
+    /// - Default: `50`
+    public var maxBatchSize: Int
+
     public init(
         baseURL: URL = AltertableConfig.defaultBaseURL,
         environment: String = AltertableConfig.defaultEnvironment,
@@ -67,7 +82,10 @@ public struct AltertableConfig {
         debug: Bool = AltertableConfig.defaultDebug,
         requestTimeout: TimeInterval = AltertableConfig.defaultRequestTimeout,
         flushOnBackground: Bool = AltertableConfig.defaultFlushOnBackground,
-        captureScreenViews: Bool = AltertableConfig.defaultCaptureScreenViews
+        captureScreenViews: Bool = AltertableConfig.defaultCaptureScreenViews,
+        flushAt: Int = AltertableConfig.defaultFlushAt,
+        flushInterval: TimeInterval = AltertableConfig.defaultFlushInterval,
+        maxBatchSize: Int = AltertableConfig.defaultMaxBatchSize
     ) {
         self.baseURL = baseURL
         self.environment = environment
@@ -78,6 +96,9 @@ public struct AltertableConfig {
         self.requestTimeout = requestTimeout
         self.flushOnBackground = flushOnBackground
         self.captureScreenViews = captureScreenViews
+        self.flushAt = flushAt
+        self.flushInterval = flushInterval
+        self.maxBatchSize = maxBatchSize
     }
 }
 

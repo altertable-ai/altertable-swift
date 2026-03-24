@@ -29,6 +29,10 @@ final class QueueTests: XCTestCase {
         MockURLProtocol.lastRequest = nil
     }
 
+    private func makeConfig(trackingConsent: TrackingConsentState = .pending) -> AltertableConfig {
+        AltertableConfig(trackingConsent: trackingConsent, flushAt: 1, flushInterval: 3600)
+    }
+
     override func tearDown() {
         session = nil
         super.tearDown()
@@ -40,7 +44,7 @@ final class QueueTests: XCTestCase {
         try? FileManager.default.removeItem(at: fileURL)
         defer { try? FileManager.default.removeItem(at: fileURL) }
 
-        let config1 = AltertableConfig(trackingConsent: .pending)
+        let config1 = makeConfig()
 
         MockURLProtocol.requestHandler = { _ in
             let response = HTTPURLResponse(
@@ -58,21 +62,22 @@ final class QueueTests: XCTestCase {
         // track() dispatches async; give the serial queue a moment to write to disk.
         Thread.sleep(forTimeInterval: 0.1)
 
-        let config2 = AltertableConfig(trackingConsent: .pending)
+        let config2 = makeConfig()
         let client2 = Altertable(apiKey: "pk_test_1", config: config2, session: session)
 
         let expectation = expectation(description: "Flush loaded event")
         MockURLProtocol.requestHandler = { request in
             if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
-               (json["event"] as? String) == "persisted_event"
+               let json = try? JSONSerialization.jsonObject(with: body) as? [[String: Any]],
+               let first = json.first,
+               (first["event"] as? String) == "persisted_event"
             {
                 expectation.fulfill()
             }
             return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
         }
 
-        client2.configure { $0.trackingConsent = .granted }
+        client2.configure { $0.trackingConsent = TrackingConsentState.granted }
 
         waitForExpectations(timeout: 1.0)
     }
@@ -81,7 +86,7 @@ final class QueueTests: XCTestCase {
         // Use a small maxQueueSize so we can verify the drop behavior without
         // enqueuing thousands of events.
         let maxSize = 3
-        let config = AltertableConfig(trackingConsent: .pending)
+        let config = makeConfig()
         let client = Altertable(apiKey: "pk_test_drop", config: config, session: session)
         client.maxQueueSize = maxSize
 
@@ -94,20 +99,22 @@ final class QueueTests: XCTestCase {
 
         var flushedEvents: [String] = []
         let exp = expectation(description: "Flushed events after overflow")
-        exp.expectedFulfillmentCount = maxSize
 
         MockURLProtocol.requestHandler = { request in
             if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
-               let event = json["event"] as? String
+               let payloads = try? JSONSerialization.jsonObject(with: body) as? [[String: Any]]
             {
-                flushedEvents.append(event)
+                for json in payloads {
+                    if let event = json["event"] as? String {
+                        flushedEvents.append(event)
+                    }
+                }
             }
             exp.fulfill()
             return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
         }
 
-        client.configure { $0.trackingConsent = .granted }
+        client.configure { $0.trackingConsent = TrackingConsentState.granted }
         waitForExpectations(timeout: 2.0)
 
         XCTAssertEqual(flushedEvents.count, maxSize, "Queue should be capped at maxQueueSize")
@@ -118,7 +125,7 @@ final class QueueTests: XCTestCase {
     }
 
     func testFailedRequestIsRequeued() {
-        let config = AltertableConfig(trackingConsent: .granted)
+        let config = makeConfig(trackingConsent: TrackingConsentState.granted)
         let client = Altertable(apiKey: "pk_test_retry", config: config, session: session)
         // Use a very short retry delay so the test doesn't take seconds.
         client.setRetryBaseDelay(0.05)
@@ -132,8 +139,9 @@ final class QueueTests: XCTestCase {
                 return (HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, nil)
             }
             if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
-               json["event"] as? String == "retry_event"
+               let payloads = try? JSONSerialization.jsonObject(with: body) as? [[String: Any]],
+               let first = payloads.first,
+               first["event"] as? String == "retry_event"
             {
                 successExp.fulfill()
             }

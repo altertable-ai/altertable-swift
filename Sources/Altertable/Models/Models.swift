@@ -21,6 +21,7 @@ struct TrackPayload: Codable, Sendable {
 }
 
 struct IdentifyPayload: Codable, Sendable {
+    let timestamp: String
     let environment: String
     let deviceId: String
     let distinctId: String
@@ -29,6 +30,7 @@ struct IdentifyPayload: Codable, Sendable {
 }
 
 struct AliasPayload: Codable, Sendable {
+    let timestamp: String
     let environment: String
     let deviceId: String
     let distinctId: String

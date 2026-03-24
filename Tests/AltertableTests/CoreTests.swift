@@ -30,6 +30,15 @@ final class CoreTests: XCTestCase {
         MockURLProtocol.lastRequest = nil
     }
 
+    private func makeClient(apiKey: String = "pk_test_123", trackingConsent: TrackingConsentState = .granted) -> Altertable {
+        let config = AltertableConfig(
+            trackingConsent: trackingConsent,
+            flushAt: 1,
+            flushInterval: 3600
+        )
+        return Altertable(apiKey: apiKey, config: config, session: session)
+    }
+
     override func tearDown() {
         client = nil
         session = nil
@@ -48,6 +57,19 @@ final class CoreTests: XCTestCase {
         return (response, nil)
     }
 
+    private func extractFirstPayload(from body: Data?) -> [String: Any]? {
+        guard let body = body,
+              let json = try? JSONSerialization.jsonObject(with: body)
+        else { return nil }
+        if let single = json as? [String: Any] {
+            return single
+        }
+        if let array = json as? [[String: Any]], let first = array.first {
+            return first
+        }
+        return nil
+    }
+
     // MARK: - Initialization
 
     func testInitialization() {
@@ -58,7 +80,7 @@ final class CoreTests: XCTestCase {
     // MARK: - track()
 
     func testTrackRequest() {
-        client = Altertable(apiKey: "pk_test_123", session: session)
+        client = makeClient()
 
         let expectation = expectation(description: "Request Sent")
 
@@ -73,15 +95,14 @@ final class CoreTests: XCTestCase {
             XCTAssertEqual(request.value(forHTTPHeaderField: "X-API-Key"), "pk_test_123")
             XCTAssertNil(url.query, "API key must not appear as a query parameter")
 
-            if let body = request.httpBody {
-                let json = try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
-                XCTAssertEqual(json?["event"] as? String, "test_event")
-                XCTAssertEqual(json?["environment"] as? String, "production")
-                XCTAssertNotNil(json?["session_id"])
-                XCTAssertNotNil(json?["device_id"])
-                XCTAssertNotNil(json?["distinct_id"])
+            if let json = extractFirstPayload(from: request.httpBody) {
+                XCTAssertEqual(json["event"] as? String, "test_event")
+                XCTAssertEqual(json["environment"] as? String, "production")
+                XCTAssertNotNil(json["session_id"])
+                XCTAssertNotNil(json["device_id"])
+                XCTAssertNotNil(json["distinct_id"])
 
-                let properties = json?["properties"] as? [String: Any]
+                let properties = json["properties"] as? [String: Any]
                 XCTAssertEqual(properties?["foo"] as? String, "bar")
             } else {
                 XCTFail("Missing http body")
@@ -99,7 +120,7 @@ final class CoreTests: XCTestCase {
     // MARK: - identify()
 
     func testIdentify() {
-        client = Altertable(apiKey: "pk_test_123", session: session)
+        client = makeClient()
 
         let expectation = expectation(description: "Identify Request")
 
@@ -109,9 +130,7 @@ final class CoreTests: XCTestCase {
             XCTAssertEqual(url.path, "/identify")
             XCTAssertEqual(request.httpMethod, "POST")
 
-            if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
-            {
+            if let json = extractFirstPayload(from: request.httpBody) {
                 XCTAssertEqual(json["distinct_id"] as? String, "user_123")
                 XCTAssertNotNil(json["anonymous_id"], "Should have anonymous_id linked")
 
@@ -130,7 +149,7 @@ final class CoreTests: XCTestCase {
     // MARK: - alias()
 
     func testAlias() {
-        client = Altertable(apiKey: "pk_test_123", session: session)
+        client = makeClient()
 
         let expectation = expectation(description: "Alias Request")
 
@@ -140,9 +159,7 @@ final class CoreTests: XCTestCase {
             XCTAssertEqual(url.path, "/alias")
             XCTAssertEqual(request.httpMethod, "POST")
 
-            if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
-            {
+            if let json = extractFirstPayload(from: request.httpBody) {
                 XCTAssertEqual(json["new_user_id"] as? String, "new_user_456")
                 XCTAssertNotNil(json["distinct_id"])
             }
@@ -158,7 +175,7 @@ final class CoreTests: XCTestCase {
     // MARK: - reset()
 
     func testReset() {
-        client = Altertable(apiKey: "pk_test_123", session: session)
+        client = makeClient()
 
         // Drain the identify request before asserting reset state.
         let identifyExp = expectation(description: "Identify before reset")
@@ -175,9 +192,7 @@ final class CoreTests: XCTestCase {
         let postResetExp = expectation(description: "Track after reset")
 
         MockURLProtocol.requestHandler = { [self] request in
-            if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
-            {
+            if let json = extractFirstPayload(from: request.httpBody) {
                 let distinctId = json["distinct_id"] as? String
                 XCTAssertNotEqual(distinctId, "user_123")
                 XCTAssertTrue(distinctId?.starts(with: "anonymous-") ?? false)
@@ -198,14 +213,12 @@ final class CoreTests: XCTestCase {
     }
 
     func testResetDeviceId() {
-        client = Altertable(apiKey: "pk_test_123", session: session)
+        client = makeClient()
 
         var firstDeviceId: String?
         let exp1 = expectation(description: "First track")
         MockURLProtocol.requestHandler = { [self] request in
-            if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
-            {
+            if let json = extractFirstPayload(from: request.httpBody) {
                 firstDeviceId = json["device_id"] as? String
             }
             exp1.fulfill()
@@ -219,9 +232,7 @@ final class CoreTests: XCTestCase {
 
         let exp2 = expectation(description: "Track after device reset")
         MockURLProtocol.requestHandler = { [self] request in
-            if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
-            {
+            if let json = extractFirstPayload(from: request.httpBody) {
                 let newDeviceId = json["device_id"] as? String
                 XCTAssertNotEqual(newDeviceId, firstDeviceId, "Device ID should change after resetDeviceId:true")
                 XCTAssertTrue(newDeviceId?.starts(with: "device-") ?? false)
@@ -236,7 +247,7 @@ final class CoreTests: XCTestCase {
     // MARK: - updateTraits()
 
     func testUpdateTraits() {
-        client = Altertable(apiKey: "pk_test_123", session: session)
+        client = makeClient()
 
         // Must identify first
         let identifyExp = expectation(description: "Identify")
@@ -248,13 +259,11 @@ final class CoreTests: XCTestCase {
         wait(for: [identifyExp], timeout: 1.0)
 
         let updateExp = expectation(description: "UpdateTraits sends identify")
-        MockURLProtocol.requestHandler = { request in
+        MockURLProtocol.requestHandler = { [self] request in
             guard let url = request.url else { throw URLError(.badURL) }
             XCTAssertEqual(url.path, "/identify")
 
-            if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
-            {
+            if let json = extractFirstPayload(from: request.httpBody) {
                 let traits = json["traits"] as? [String: Any]
                 XCTAssertEqual(traits?["plan"] as? String, "premium")
             }
@@ -267,7 +276,7 @@ final class CoreTests: XCTestCase {
     }
 
     func testUpdateTraitsWithoutIdentifyIsDropped() {
-        client = Altertable(apiKey: "pk_test_123", session: session)
+        client = makeClient()
 
         MockURLProtocol.requestHandler = { _ in
             XCTFail("Should not send request when not identified")
@@ -290,15 +299,13 @@ final class CoreTests: XCTestCase {
     // MARK: - Session renewal
 
     func testSessionContinuity() {
-        client = Altertable(apiKey: "pk_test_123", session: session)
+        client = makeClient()
 
         var firstSessionId: String?
 
         let exp1 = expectation(description: "First Request")
         MockURLProtocol.requestHandler = { [self] request in
-            if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
-            {
+            if let json = extractFirstPayload(from: request.httpBody) {
                 firstSessionId = json["session_id"] as? String
             }
             exp1.fulfill()
@@ -310,9 +317,7 @@ final class CoreTests: XCTestCase {
 
         let exp2 = expectation(description: "Second Request")
         MockURLProtocol.requestHandler = { [self] request in
-            if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
-            {
+            if let json = extractFirstPayload(from: request.httpBody) {
                 XCTAssertEqual(
                     json["session_id"] as? String,
                     firstSessionId,
@@ -329,8 +334,7 @@ final class CoreTests: XCTestCase {
     // MARK: - Consent
 
     func testConsentPendingQueuesEvents() {
-        let config = AltertableConfig(trackingConsent: .pending)
-        client = Altertable(apiKey: "pk_test_123", config: config, session: session)
+        client = makeClient(trackingConsent: TrackingConsentState.pending)
         client.track(event: "pending_event")
         MockURLProtocol.requestHandler = { _ in
             XCTFail("Should not send while consent is pending")
@@ -347,9 +351,7 @@ final class CoreTests: XCTestCase {
         wait(for: [noSendExp], timeout: 0.1)
         let flushExp = expectation(description: "Flush after consent granted")
         MockURLProtocol.requestHandler = { [self] request in
-            if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
-            {
+            if let json = extractFirstPayload(from: request.httpBody) {
                 XCTAssertEqual(json["event"] as? String, "pending_event")
             }
             flushExp.fulfill()
@@ -360,8 +362,7 @@ final class CoreTests: XCTestCase {
     }
 
     func testConsentDeniedClearsQueue() {
-        let config = AltertableConfig(trackingConsent: .pending)
-        client = Altertable(apiKey: "pk_test_123", config: config, session: session)
+        client = makeClient(trackingConsent: TrackingConsentState.pending)
         client.track(event: "will_be_dropped")
         MockURLProtocol.requestHandler = { _ in
             XCTFail("Should not send after consent denied")
@@ -382,7 +383,7 @@ final class CoreTests: XCTestCase {
     // MARK: - User switching
 
     func testIdentifySwitchingUser() {
-        client = Altertable(apiKey: "pk_test_123", session: session)
+        client = makeClient()
         let expIdentifyA = expectation(description: "Identify user_A")
         MockURLProtocol.requestHandler = { [self] request in
             expIdentifyA.fulfill()
@@ -394,9 +395,7 @@ final class CoreTests: XCTestCase {
         var originalSessionId: String?
         let exp1 = expectation(description: "Capture session")
         MockURLProtocol.requestHandler = { [self] request in
-            if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
-            {
+            if let json = extractFirstPayload(from: request.httpBody) {
                 originalSessionId = json["session_id"] as? String
             }
             exp1.fulfill()
@@ -409,9 +408,7 @@ final class CoreTests: XCTestCase {
         exp2.expectedFulfillmentCount = 2
         var trackRequestSeen = false
         MockURLProtocol.requestHandler = { [self] request in
-            if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
-            {
+            if let json = extractFirstPayload(from: request.httpBody) {
                 if json["event"] as? String == "post_switch" {
                     trackRequestSeen = true
                     XCTAssertNotEqual(
@@ -434,13 +431,11 @@ final class CoreTests: XCTestCase {
     // MARK: - configure() fields
 
     func testConfigureEnvironment() {
-        let config = AltertableConfig(environment: "staging")
+        let config = AltertableConfig(environment: "staging", flushAt: 1, flushInterval: 3600)
         client = Altertable(apiKey: "pk_test_123", config: config, session: session)
         let exp = expectation(description: "Track in new environment")
         MockURLProtocol.requestHandler = { [self] request in
-            if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
-            {
+            if let json = extractFirstPayload(from: request.httpBody) {
                 XCTAssertEqual(json["environment"] as? String, "development")
             }
             exp.fulfill()
