@@ -77,12 +77,15 @@ Clears the current session and identity (e.g. on logout).
 client.reset()
 ```
 
-### `flush()`
+### `flush(completion:)`
 
-Forces any queued events to be sent immediately.
+Forces buffered events to be sent as soon as possible. The optional `completion` runs on the SDK’s serial queue once the buffer is empty and any in-flight batches from this flush have finished (or failed without being re-queued).
 
 ```swift
 client.flush()
+client.flush {
+    // flush finished
+}
 ```
 
 ### `configure(_:)`
@@ -97,7 +100,7 @@ client.configure { config in
 }
 ```
 
-**Note**: `requestTimeout` and `flushOnBackground` are init-only properties. Changes to these via `configure()` are ignored.
+**Note**: `requestTimeout`, `flushOnBackground`, `flushEventThreshold`, `flushIntervalMs`, and `maxBatchSize` are init-only properties. Changes to these via `configure()` are ignored.
 
 ### `screen(name:properties:)`
 
@@ -185,6 +188,13 @@ Initialize with an `AltertableConfig` object for advanced options.
 | `requestTimeout` | `TimeInterval` | `10.0` | Network request timeout in seconds. |
 | `flushOnBackground` | `Bool` | `true` | Automatically flush events when app backgrounds. |
 | `captureScreenViews` | `Bool` | `true` | Automatically track screen views on UIKit platforms (iOS, tvOS). On other platforms, use `screen()` or `.screenView()` for manual tracking. |
+| `flushEventThreshold` | `Int` | `20` | When the number of buffered events reaches this value, the SDK flushes immediately. Init-only. |
+| `flushIntervalMs` | `Int` | `1000` | Periodic flush interval in milliseconds. Init-only. |
+| `maxBatchSize` | `Int` | `20` | Maximum payloads per HTTP request for a given endpoint. Init-only. |
+
+## Event batching
+
+Events are buffered and sent in HTTP batches (JSON arrays) instead of one request per event. Flushes happen when the buffer hits `flushEventThreshold`, on each `flushIntervalMs` tick while consent is granted, when you call `flush()`, and when the app backgrounds (if `flushOnBackground` is `true`). Failed deliveries that are retryable (e.g. network errors, 5xx, 429) can be re-queued after HTTP-level retries are exhausted.
 
 ## License
 

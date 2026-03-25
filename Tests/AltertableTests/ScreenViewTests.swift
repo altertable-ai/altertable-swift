@@ -20,6 +20,7 @@ final class ScreenViewTests: XCTestCase {
         super.setUp()
 
         SDKConstants.StorageKeys.all.forEach { UserDefaults.standard.removeObject(forKey: $0) }
+        TestSupport.removeDefaultPersistedEventQueue()
 
         #if canImport(FoundationNetworking)
             let config = URLSessionConfiguration.default
@@ -62,7 +63,7 @@ final class ScreenViewTests: XCTestCase {
     // MARK: - screen() method tests
 
     func testScreenMethodSendsCorrectEvent() {
-        client = Altertable(apiKey: "pk_test_123", session: session)
+        client = Altertable(apiKey: "pk_test_123", config: .unitTest, session: session)
 
         let expectation = expectation(description: "Screen view event sent")
 
@@ -72,11 +73,10 @@ final class ScreenViewTests: XCTestCase {
             XCTAssertEqual(url.path, "/track")
             XCTAssertEqual(request.httpMethod, "POST")
 
-            if let body = request.httpBody {
-                let json = try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
-                XCTAssertEqual(json?["event"] as? String, SDKConstants.eventScreenView)
+            if let body = request.httpBody, let json = try? TestJSON.firstObject(from: body) {
+                XCTAssertEqual(json["event"] as? String, SDKConstants.eventScreenView)
 
-                let properties = json?["properties"] as? [String: Any]
+                let properties = json["properties"] as? [String: Any]
                 XCTAssertEqual(properties?[SDKConstants.propertyScreenName] as? String, "TestScreen")
                 XCTAssertEqual(properties?["custom_prop"] as? String, "custom_value")
             } else {
@@ -93,18 +93,17 @@ final class ScreenViewTests: XCTestCase {
     }
 
     func testScreenMethodWithDefaultProperties() {
-        client = Altertable(apiKey: "pk_test_123", session: session)
+        client = Altertable(apiKey: "pk_test_123", config: .unitTest, session: session)
 
         let expectation = expectation(description: "Screen view event sent")
 
         MockURLProtocol.requestHandler = { [self] request in
             guard let url = request.url else { throw URLError(.badURL) }
 
-            if let body = request.httpBody {
-                let json = try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
-                XCTAssertEqual(json?["event"] as? String, SDKConstants.eventScreenView)
+            if let body = request.httpBody, let json = try? TestJSON.firstObject(from: body) {
+                XCTAssertEqual(json["event"] as? String, SDKConstants.eventScreenView)
 
-                let properties = json?["properties"] as? [String: Any]
+                let properties = json["properties"] as? [String: Any]
                 XCTAssertEqual(properties?[SDKConstants.propertyScreenName] as? String, "HomeScreen")
                 // Should include system properties
                 XCTAssertNotNil(properties?[SDKConstants.propertyLib])
@@ -139,7 +138,7 @@ final class ScreenViewTests: XCTestCase {
 
             // Test actual screen name extraction via the integration
             // We need to install the integration to test the extractScreenName logic
-            let config = AltertableConfig(captureScreenViews: true)
+            let config = AltertableConfig.makeUnitTest(captureScreenViews: true)
             let testClient = Altertable(apiKey: "pk_test_screen_names", config: config, session: session)
 
             // Create expectation to capture screen events
@@ -148,9 +147,8 @@ final class ScreenViewTests: XCTestCase {
 
             var capturedScreenNames: [String] = []
             MockURLProtocol.requestHandler = { request in
-                if let body = request.httpBody {
-                    let json = try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
-                    if let properties = json?["properties"] as? [String: Any],
+                if let body = request.httpBody, let json = try? TestJSON.firstObject(from: body) {
+                    if let properties = json["properties"] as? [String: Any],
                        let screenName = properties[SDKConstants.propertyScreenName] as? String
                     {
                         capturedScreenNames.append(screenName)
@@ -186,7 +184,7 @@ final class ScreenViewTests: XCTestCase {
         }
 
         func testContainerViewControllersAreSkipped() {
-            let config = AltertableConfig(captureScreenViews: true)
+            let config = AltertableConfig.makeUnitTest(captureScreenViews: true)
             client = Altertable(apiKey: "pk_test_containers", config: config, session: session)
 
             let noEventExpectation = expectation(description: "No screen events from container VCs")
@@ -208,7 +206,7 @@ final class ScreenViewTests: XCTestCase {
     // MARK: - Configuration tests
 
     func testCaptureScreenViewsDisabled() {
-        let config = AltertableConfig(captureScreenViews: false)
+        let config = AltertableConfig.makeUnitTest(captureScreenViews: false)
         client = Altertable(apiKey: "pk_test_123", config: config, session: session)
 
         // When disabled, the integration should not be installed
@@ -226,7 +224,7 @@ final class ScreenViewTests: XCTestCase {
     }
 
     func testCaptureScreenViewsEnabled() {
-        let config = AltertableConfig(captureScreenViews: true)
+        let config = AltertableConfig.makeUnitTest(captureScreenViews: true)
         client = Altertable(apiKey: "pk_test_123", config: config, session: session)
 
         #if canImport(UIKit) && !os(watchOS)
@@ -241,7 +239,7 @@ final class ScreenViewTests: XCTestCase {
     }
 
     func testConfigureCaptureScreenViews() {
-        client = Altertable(apiKey: "pk_test_123", session: session)
+        client = Altertable(apiKey: "pk_test_123", config: .unitTest, session: session)
 
         #if canImport(UIKit) && !os(watchOS)
             // Initially should be disabled by default on UIKit platforms
@@ -308,7 +306,7 @@ final class ScreenViewTests: XCTestCase {
 
     #if canImport(UIKit) && !os(watchOS)
         func testDisableAtRuntimeStopsTracking() {
-            let config = AltertableConfig(captureScreenViews: true)
+            let config = AltertableConfig.makeUnitTest(captureScreenViews: true)
             client = Altertable(apiKey: "pk_test_disable", config: config, session: session)
 
             // Create a test view controller
@@ -347,13 +345,13 @@ final class ScreenViewTests: XCTestCase {
 
     #if canImport(UIKit) && !os(watchOS)
         func testSwizzleInstalledOnce() {
-            let config1 = AltertableConfig(captureScreenViews: true)
+            let config1 = AltertableConfig.makeUnitTest(captureScreenViews: true)
             let client1 = Altertable(apiKey: "pk_test_1", config: config1, session: session)
             let integration1 = ScreenViewIntegration.shared
             XCTAssertNotNil(integration1)
 
             // A second client must not replace shared
-            let config2 = AltertableConfig(captureScreenViews: true)
+            let config2 = AltertableConfig.makeUnitTest(captureScreenViews: true)
             _ = Altertable(apiKey: "pk_test_2", config: config2, session: session)
             XCTAssertTrue(
                 ScreenViewIntegration.shared === integration1,
@@ -385,7 +383,7 @@ final class ScreenViewTests: XCTestCase {
             // Create first client and claim ownership
             var client1: Altertable? = Altertable(
                 apiKey: "pk_test_client1",
-                config: AltertableConfig(captureScreenViews: true),
+                config: AltertableConfig.makeUnitTest(captureScreenViews: true),
                 session: session
             )
             let integration1 = ScreenViewIntegration.shared
@@ -408,7 +406,7 @@ final class ScreenViewTests: XCTestCase {
             // Create second client - should be able to claim ownership
             let client2 = Altertable(
                 apiKey: "pk_test_client2",
-                config: AltertableConfig(captureScreenViews: true),
+                config: AltertableConfig.makeUnitTest(captureScreenViews: true),
                 session: session
             )
             XCTAssertNotNil(ScreenViewIntegration.shared)
@@ -431,7 +429,7 @@ final class ScreenViewTests: XCTestCase {
             // Create client A with capture enabled
             let clientA = Altertable(
                 apiKey: "pk_test_clientA",
-                config: AltertableConfig(captureScreenViews: true),
+                config: AltertableConfig.makeUnitTest(captureScreenViews: true),
                 session: session
             )
             XCTAssertNotNil(ScreenViewIntegration.shared)
@@ -453,7 +451,7 @@ final class ScreenViewTests: XCTestCase {
             // Create client B and enable - should be able to claim ownership
             let clientB = Altertable(
                 apiKey: "pk_test_clientB",
-                config: AltertableConfig(captureScreenViews: true),
+                config: AltertableConfig.makeUnitTest(captureScreenViews: true),
                 session: session
             )
             XCTAssertNotNil(ScreenViewIntegration.shared)
@@ -478,7 +476,7 @@ final class ScreenViewTests: XCTestCase {
         func testDisableThenReEnableOnSameClient() {
             client = Altertable(
                 apiKey: "pk_test_123",
-                config: AltertableConfig(captureScreenViews: true),
+                config: AltertableConfig.makeUnitTest(captureScreenViews: true),
                 session: session
             )
             XCTAssertNotNil(ScreenViewIntegration.shared)
@@ -512,7 +510,7 @@ final class ScreenViewTests: XCTestCase {
             // Create client A with capture enabled
             let clientA = Altertable(
                 apiKey: "pk_test_clientA",
-                config: AltertableConfig(captureScreenViews: true),
+                config: AltertableConfig.makeUnitTest(captureScreenViews: true),
                 session: session
             )
             XCTAssertNotNil(ScreenViewIntegration.shared)
@@ -522,7 +520,7 @@ final class ScreenViewTests: XCTestCase {
             // B should register a callback but not claim ownership yet
             let clientB = Altertable(
                 apiKey: "pk_test_clientB",
-                config: AltertableConfig(captureScreenViews: true),
+                config: AltertableConfig.makeUnitTest(captureScreenViews: true),
                 session: session
             )
             XCTAssertTrue(ScreenViewIntegration.shared?.client === clientA, "Client A should still own it")
@@ -567,17 +565,16 @@ final class ScreenViewTests: XCTestCase {
 
     #if canImport(SwiftUI)
         func testSwiftUIModifierWithExplicitClient() {
-            client = Altertable(apiKey: "pk_test_swiftui", session: session)
+            client = Altertable(apiKey: "pk_test_swiftui", config: .unitTest, session: session)
 
             let expectation = expectation(description: "SwiftUI screen view tracked")
             MockURLProtocol.requestHandler = { [self] request in
                 guard let url = request.url else { throw URLError(.badURL) }
 
-                if let body = request.httpBody {
-                    let json = try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
-                    XCTAssertEqual(json?["event"] as? String, SDKConstants.eventScreenView)
+                if let body = request.httpBody, let json = try? TestJSON.firstObject(from: body) {
+                    XCTAssertEqual(json["event"] as? String, SDKConstants.eventScreenView)
 
-                    let properties = json?["properties"] as? [String: Any]
+                    let properties = json["properties"] as? [String: Any]
                     XCTAssertEqual(properties?[SDKConstants.propertyScreenName] as? String, "TestView")
                 }
 
@@ -598,7 +595,7 @@ final class ScreenViewTests: XCTestCase {
                 // Create client with capture enabled to set up shared integration
                 client = Altertable(
                     apiKey: "pk_test_swiftui_fallback",
-                    config: AltertableConfig(captureScreenViews: true),
+                    config: AltertableConfig.makeUnitTest(captureScreenViews: true),
                     session: session
                 )
                 XCTAssertNotNil(ScreenViewIntegration.shared)
@@ -607,11 +604,10 @@ final class ScreenViewTests: XCTestCase {
                 MockURLProtocol.requestHandler = { [self] request in
                     guard let url = request.url else { throw URLError(.badURL) }
 
-                    if let body = request.httpBody {
-                        let json = try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
-                        XCTAssertEqual(json?["event"] as? String, SDKConstants.eventScreenView)
+                    if let body = request.httpBody, let json = try? TestJSON.firstObject(from: body) {
+                        XCTAssertEqual(json["event"] as? String, SDKConstants.eventScreenView)
 
-                        let properties = json?["properties"] as? [String: Any]
+                        let properties = json["properties"] as? [String: Any]
                         XCTAssertEqual(properties?[SDKConstants.propertyScreenName] as? String, "FallbackView")
                     }
 
@@ -636,7 +632,7 @@ final class ScreenViewTests: XCTestCase {
             // Create client with capture disabled - no shared integration
             client = Altertable(
                 apiKey: "pk_test_swiftui_no_shared",
-                config: AltertableConfig(captureScreenViews: false),
+                config: AltertableConfig.makeUnitTest(captureScreenViews: false),
                 session: session
             )
             XCTAssertNil(ScreenViewIntegration.shared?.client)

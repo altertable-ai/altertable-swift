@@ -16,6 +16,7 @@ final class QueueTests: XCTestCase {
         super.setUp()
 
         SDKConstants.StorageKeys.all.forEach { UserDefaults.standard.removeObject(forKey: $0) }
+        TestSupport.removeDefaultPersistedEventQueue()
 
         #if canImport(FoundationNetworking)
             let sessionConfig = URLSessionConfiguration.default
@@ -40,7 +41,8 @@ final class QueueTests: XCTestCase {
         try? FileManager.default.removeItem(at: fileURL)
         defer { try? FileManager.default.removeItem(at: fileURL) }
 
-        let config1 = AltertableConfig(trackingConsent: .pending)
+        var config1 = AltertableConfig(trackingConsent: .pending)
+        config1.applyUnitTestImmediateFlush()
 
         MockURLProtocol.requestHandler = { _ in
             let response = HTTPURLResponse(
@@ -58,13 +60,14 @@ final class QueueTests: XCTestCase {
         // track() dispatches async; give the serial queue a moment to write to disk.
         Thread.sleep(forTimeInterval: 0.1)
 
-        let config2 = AltertableConfig(trackingConsent: .pending)
+        var config2 = AltertableConfig(trackingConsent: .pending)
+        config2.applyUnitTestImmediateFlush()
         let client2 = Altertable(apiKey: "pk_test_1", config: config2, session: session)
 
         let expectation = expectation(description: "Flush loaded event")
         MockURLProtocol.requestHandler = { request in
             if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+               let json = try? TestJSON.firstObject(from: body),
                (json["event"] as? String) == "persisted_event"
             {
                 expectation.fulfill()
@@ -81,7 +84,10 @@ final class QueueTests: XCTestCase {
         // Use a small maxQueueSize so we can verify the drop behavior without
         // enqueuing thousands of events.
         let maxSize = 3
-        let config = AltertableConfig(trackingConsent: .pending)
+        var config = AltertableConfig(trackingConsent: .pending)
+        config.applyUnitTestImmediateFlush()
+        // One HTTP request per event so this test can count flushes like the pre-batching behavior.
+        config.maxBatchSize = 1
         let client = Altertable(apiKey: "pk_test_drop", config: config, session: session)
         client.maxQueueSize = maxSize
 
@@ -98,7 +104,7 @@ final class QueueTests: XCTestCase {
 
         MockURLProtocol.requestHandler = { request in
             if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+               let json = try? TestJSON.firstObject(from: body),
                let event = json["event"] as? String
             {
                 flushedEvents.append(event)
@@ -118,7 +124,8 @@ final class QueueTests: XCTestCase {
     }
 
     func testFailedRequestIsRequeued() {
-        let config = AltertableConfig(trackingConsent: .granted)
+        var config = AltertableConfig(trackingConsent: .granted)
+        config.applyUnitTestImmediateFlush()
         let client = Altertable(apiKey: "pk_test_retry", config: config, session: session)
         // Use a very short retry delay so the test doesn't take seconds.
         client.setRetryBaseDelay(0.05)
@@ -132,7 +139,7 @@ final class QueueTests: XCTestCase {
                 return (HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, nil)
             }
             if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+               let json = try? TestJSON.firstObject(from: body),
                json["event"] as? String == "retry_event"
             {
                 successExp.fulfill()

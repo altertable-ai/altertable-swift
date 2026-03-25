@@ -51,4 +51,16 @@ enum SDKConstants {
 
     /// Limits
     static let maxQueueSize = 1000
+
+    /// Outbound HTTP request timeout (seconds)
+    static let defaultRequestTimeoutSeconds: TimeInterval = 10.0
+
+    /// Batching
+    static let defaultFlushIntervalMs = 1000
+    static let defaultFlushEventThreshold = 20
+    static let defaultMaxBatchSize = 20
+
+    /// HTTP retries
+    static let httpRetryMaxAttempts = 4
+    static let httpRetryBaseDelaySeconds = 1.0
 }
