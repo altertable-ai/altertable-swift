@@ -31,7 +31,7 @@ final class Requester {
 
     // `retryBaseDelay` is a test-only override; guard all access through `delayQueue`.
     private let delayQueue = DispatchQueue(label: "ai.altertable.requester.delay")
-    private var _retryBaseDelay: Double = 2.0
+    private var _retryBaseDelay: Double = SDKConstants.httpRetryBaseDelaySeconds
     var retryBaseDelay: Double {
         get { delayQueue.sync { _retryBaseDelay } }
         set { delayQueue.sync { _retryBaseDelay = newValue } }
@@ -61,6 +61,15 @@ final class Requester {
         sendRequest(endpoint: P.endpoint, baseURL: baseURL, payload: payload, completion: completion)
     }
 
+    /// Sends a batch as a JSON array body to the same endpoint as a single payload.
+    func sendBatch<P: APIPayload>(_ payloads: [P], baseURL: URL, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard !payloads.isEmpty else {
+            completion(.success(()))
+            return
+        }
+        sendBatchRequest(endpoint: P.endpoint, baseURL: baseURL, payloads: payloads, completion: completion)
+    }
+
     private func sendRequest(
         endpoint: String,
         baseURL: URL,
@@ -84,7 +93,32 @@ final class Requester {
             return
         }
 
-        execute(request: request, attempt: 1, maxAttempts: 3, completion: completion)
+        execute(request: request, attempt: 1, maxAttempts: SDKConstants.httpRetryMaxAttempts, completion: completion)
+    }
+
+    private func sendBatchRequest<P: APIPayload>(
+        endpoint: String,
+        baseURL: URL,
+        payloads: [P],
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        let url = baseURL.appendingPathComponent(endpoint)
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+
+        do {
+            let encoder = JSONEncoder()
+            encoder.keyEncodingStrategy = .convertToSnakeCase
+            request.httpBody = try encoder.encode(payloads)
+        } catch {
+            completion(.failure(error))
+            return
+        }
+
+        execute(request: request, attempt: 1, maxAttempts: SDKConstants.httpRetryMaxAttempts, completion: completion)
     }
 
     private func execute(
@@ -143,9 +177,32 @@ final class Requester {
             return
         }
 
-        let delay = pow(retryBaseDelay, Double(attempt))
+        let attemptIndex = attempt - 1
+        let exponentialDelay = retryBaseDelay * pow(2.0, Double(attemptIndex))
+        let jitterFactor = 0.5 + Double.random(in: 0 ..< 1)
+        let delay = exponentialDelay * jitterFactor
         DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in
             self?.execute(request: request, attempt: attempt + 1, maxAttempts: maxAttempts, completion: completion)
+        }
+    }
+}
+
+extension Requester {
+    /// Whether a failed delivery should be retried later by the batcher (after HTTP-level retries are exhausted).
+    static func isRetryableDeliveryError(_ error: Error) -> Bool {
+        if error is URLError {
+            return true
+        }
+        guard let apiError = error as? APIError else {
+            return false
+        }
+        switch apiError {
+        case .networkError:
+            return true
+        case let .httpError(code):
+            return code == 429 || code >= 500
+        case .invalidURL:
+            return false
         }
     }
 }

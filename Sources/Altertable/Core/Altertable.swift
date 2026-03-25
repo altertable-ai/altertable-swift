@@ -30,9 +30,10 @@ public final class Altertable: @unchecked Sendable {
     private var anonymousId: String?
     private var deviceId: String
 
-    // Event queue — accessed only on `queue`
-    private var eventQueue: [QueuedRequest] = []
     private let queueStorage: QueueStorage
+
+    /// Lazy so the send closure can capture `[weak self]` after initialization completes.
+    private lazy var batcher: Batcher = makeBatcher()
     internal var maxQueueSize: Int = SDKConstants.maxQueueSize
 
     /// NotificationCenter token for lifecycle hooks
@@ -44,6 +45,10 @@ public final class Altertable: @unchecked Sendable {
         case track(TrackPayload)
         case identify(IdentifyPayload)
         case alias(AliasPayload)
+    }
+
+    private enum AltertableSendError: Error {
+        case clientDeallocated
     }
 
     /// Initializes the Altertable SDK with your API key and optional configuration.
@@ -65,7 +70,6 @@ public final class Altertable: @unchecked Sendable {
     init(apiKey: String, config: AltertableConfig? = nil, session: URLSession? = nil) {
         var internalConfig = config ?? AltertableConfig()
 
-        self.config = internalConfig
         logger = Logger(isDebug: internalConfig.debug)
         queueStorage = QueueStorage(logger: logger)
         storage = UserDefaultsStorage()
@@ -96,7 +100,14 @@ public final class Altertable: @unchecked Sendable {
             internalConfig.trackingConsent = consent
         }
 
-        eventQueue = queueStorage.load()
+        // Persisted consent must drive runtime `config` before any public API checks `config.trackingConsent`.
+        self.config = internalConfig
+
+        let consentAtLaunch = internalConfig.trackingConsent
+        queue.async { [self] in
+            _ = batcher
+            applyTrackingConsentToBatcherAndPersistQueue(consentAtLaunch)
+        }
 
         setupLifecycleHooks()
         setupScreenViews(enabled: internalConfig.captureScreenViews)
@@ -299,6 +310,7 @@ public final class Altertable: @unchecked Sendable {
                     AltertableConfig.defaultTrackingConsent.rawValue,
                     forKey: SDKConstants.StorageKeys.trackingConsent
                 )
+                applyTrackingConsentToBatcherAndPersistQueue(config.trackingConsent)
             }
         }
     }
@@ -320,23 +332,29 @@ public final class Altertable: @unchecked Sendable {
             // Snapshot init-only fields that cannot be changed after initialization
             let frozenTimeout = config.requestTimeout
             let frozenFlush = config.flushOnBackground
+            let frozenFlushThreshold = config.flushEventThreshold
+            let frozenFlushIntervalMs = config.flushIntervalMs
+            let frozenMaxBatchSize = config.maxBatchSize
 
             updates(&config)
 
             // Restore init-only fields (they are only read at init time)
             config.requestTimeout = frozenTimeout
             config.flushOnBackground = frozenFlush
+            config.flushEventThreshold = frozenFlushThreshold
+            config.flushIntervalMs = frozenFlushIntervalMs
+            config.maxBatchSize = frozenMaxBatchSize
+
+            batcher.updateFlushConfig(
+                flushEventThreshold: frozenFlushThreshold,
+                flushIntervalMs: frozenFlushIntervalMs,
+                maxBatchSize: frozenMaxBatchSize
+            )
 
             // Handle tracking consent changes
             if config.trackingConsent != previousConsent {
                 storage.set(config.trackingConsent.rawValue, forKey: SDKConstants.StorageKeys.trackingConsent)
-
-                if config.trackingConsent == .granted {
-                    _flush()
-                } else if config.trackingConsent == .denied {
-                    eventQueue.removeAll()
-                    queueStorage.save(eventQueue)
-                }
+                applyTrackingConsentToBatcherAndPersistQueue(config.trackingConsent)
             }
 
             // Handle debug changes
@@ -349,15 +367,28 @@ public final class Altertable: @unchecked Sendable {
         }
     }
 
-    /// Flushes the event queue, sending all pending events immediately.
+    /// Flushes buffered events as soon as possible when tracking consent is `.granted`.
+    ///
+    /// When consent is not granted, this is a no-op (no network); `completion` is still invoked on the SDK serial queue.
+    ///
+    /// - Parameter completion: Called on the SDK serial queue when the buffer is empty and all
+    ///   in-flight batches for this flush have finished (or failed without requeue), or immediately
+    ///   when consent is not granted.
     ///
     /// - Example:
     /// ```swift
     /// altertable.flush()
+    /// altertable.flush {
+    ///   // done
+    /// }
     /// ```
-    public func flush() {
+    public func flush(completion: (() -> Void)? = nil) {
         queue.async { [self] in
-            _flush()
+            guard config.trackingConsent == .granted else {
+                completion?()
+                return
+            }
+            batcher.flush(completion: completion)
         }
     }
 
@@ -377,72 +408,88 @@ public final class Altertable: @unchecked Sendable {
 
     // MARK: - Private — must only be called from within `queue`
 
+    /// Applies batching/timer behavior for `consent` and persists the queue snapshot.
+    /// Callers must persist `SDKConstants.StorageKeys.trackingConsent` when the consent value itself changes.
+    private func applyTrackingConsentToBatcherAndPersistQueue(_ consent: TrackingConsentState) {
+        switch consent {
+        case .granted:
+            batcher.setSendingEnabled(true)
+            batcher.startTimer()
+            batcher.flush { [self] in
+                queueStorage.save(batcher.snapshotForPersistence())
+            }
+        case .denied:
+            batcher.setSendingEnabled(false)
+            batcher.clear()
+            queueStorage.save(batcher.snapshotForPersistence())
+        case .pending, .dismissed:
+            batcher.setSendingEnabled(false)
+            batcher.stopTimer()
+            queueStorage.save(batcher.snapshotForPersistence())
+        }
+    }
+
     private func enqueue(_ request: QueuedRequest) {
         if config.trackingConsent == .denied {
             return
         }
 
-        if eventQueue.count >= maxQueueSize {
-            eventQueue.removeFirst()
+        if batcher.totalCount >= maxQueueSize {
+            batcher.dropOldest()
             logger.warn("Event queue full — oldest event dropped.")
         }
 
-        eventQueue.append(request)
+        batcher.add(request, autoFlush: config.trackingConsent == .granted)
         // Persist only when consent is pending (events may survive app restart before
-        // consent is granted). When consent is granted, _flush() clears the queue
-        // and persists the empty state immediately after, so per-enqueue writes are
-        // redundant and expensive for high-frequency tracking.
+        // consent is granted). When consent is granted, successful sends empty the buffer
+        // without per-enqueue disk writes.
         if config.trackingConsent != .granted {
-            queueStorage.save(eventQueue)
-        }
-        _flush()
-    }
-
-    /// Queue-isolated flush implementation. Must only be called from within `queue`.
-    private func _flush() {
-        guard !eventQueue.isEmpty else { return }
-        guard config.trackingConsent == .granted else { return }
-
-        let batch = eventQueue
-        eventQueue.removeAll()
-        queueStorage.save(eventQueue)
-
-        for request in batch {
-            sendRequest(request)
+            queueStorage.save(batcher.snapshotForPersistence())
         }
     }
 
-    private func sendRequest(_ request: QueuedRequest) {
-        // Snapshot baseURL here, on the serial queue, before handing off to Requester
-        // which may execute on arbitrary URLSession callback threads.
+    private func makeBatcher() -> Batcher {
+        Batcher(
+            initialQueue: queueStorage.load(),
+            flushEventThreshold: config.flushEventThreshold,
+            flushIntervalMs: config.flushIntervalMs,
+            maxBatchSize: config.maxBatchSize,
+            altertableQueue: queue,
+            sendChunk: { [weak self] chunk, completion in
+                guard let self else {
+                    completion(.failure(AltertableSendError.clientDeallocated))
+                    return
+                }
+                self.sendBatchedChunk(chunk: chunk, completion: completion)
+            }
+        )
+    }
+
+    private func sendBatchedChunk(
+        chunk: Batcher.HomogeneousChunk,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
         let baseURL = config.baseURL
 
-        let completion: (Result<Void, Error>) -> Void = { [weak self] result in
+        let finish: (Result<Void, Error>) -> Void = { [weak self] result in
             guard let self else { return }
-            switch result {
-            case .success:
-                break
-            case let .failure(error):
-                self.queue.async {
-                    // Only re-enqueue transient failures (handled by Requester's retry
-                    // logic for 5xx/429/network errors). By the time completion(.failure)
-                    // is called here, Requester has already exhausted its retries, so we
-                    // do not attempt to re-enqueue — doing so would cause an infinite loop
-                    // for permanent client errors (4xx).
-                    // Skip if consent was revoked while the request was in flight.
-                    guard self.config.trackingConsent != .denied else { return }
-                    self.config.onError?(error)
+            self.queue.async {
+                if case let .failure(error) = result {
+                    if !Requester.isRetryableDeliveryError(error), self.config.trackingConsent != .denied {
+                        self.config.onError?(error)
+                    }
                 }
+                completion(result)
             }
         }
 
-        switch request {
-        case let .track(payload):
-            requester.send(payload, baseURL: baseURL, completion: completion)
-        case let .identify(payload):
-            requester.send(payload, baseURL: baseURL, completion: completion)
-        case let .alias(payload):
-            requester.send(payload, baseURL: baseURL, completion: completion)
+        switch chunk {
+        case let .track(payloads):
+            requester.sendBatch(payloads, baseURL: baseURL, completion: finish)
+        case let .identify(payloads):
+            requester.sendBatch(payloads, baseURL: baseURL, completion: finish)
+        case let .alias(payloads):
+            requester.sendBatch(payloads, baseURL: baseURL, completion: finish)
         }
     }
 
@@ -462,8 +509,8 @@ public final class Altertable: @unchecked Sendable {
             storage.set(newDevice, forKey: SDKConstants.StorageKeys.deviceId)
         }
 
-        eventQueue.removeAll()
-        queueStorage.save(eventQueue)
+        batcher.clear()
+        applyTrackingConsentToBatcherAndPersistQueue(config.trackingConsent)
     }
 
     private func setupLifecycleHooks() {
@@ -474,7 +521,13 @@ public final class Altertable: @unchecked Sendable {
                     object: nil,
                     queue: .main
                 ) { [weak self] _ in
-                    self?.flush()
+                    guard let self else { return }
+                    let backgroundTask = ExclusiveBackgroundTask()
+                    backgroundTask.begin()
+                    // `flush` only drains when consent is granted.
+                    self.flush {
+                        backgroundTask.end()
+                    }
                 }
             }
         #endif
@@ -582,6 +635,37 @@ public final class Altertable: @unchecked Sendable {
         #endif
     }
 }
+
+#if canImport(UIKit)
+    /// Ensures `UIApplication.endBackgroundTask` runs at most once whether the task expires or `flush` completes first.
+    private final class ExclusiveBackgroundTask {
+        private var taskId: UIBackgroundTaskIdentifier = .invalid
+        private let lock = NSLock()
+
+        func begin() {
+            lock.lock()
+            taskId = UIApplication.shared.beginBackgroundTask { [weak self] in
+                self?.end()
+            }
+            lock.unlock()
+        }
+
+        func end() {
+            lock.lock()
+            let id = taskId
+            taskId = .invalid
+            lock.unlock()
+            guard id != .invalid else { return }
+            if Thread.isMainThread {
+                UIApplication.shared.endBackgroundTask(id)
+            } else {
+                DispatchQueue.main.async {
+                    UIApplication.shared.endBackgroundTask(id)
+                }
+            }
+        }
+    }
+#endif
 
 #if canImport(Combine)
     // Conformance to ObservableObject enables SwiftUI dependency injection via @StateObject/@EnvironmentObject.
