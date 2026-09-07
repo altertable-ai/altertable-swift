@@ -196,6 +196,41 @@ final class BatcherTests: XCTestCase {
         waitForExpectations(timeout: 1.0)
     }
 
+    func testDefaultMaxBatchSizeSplitsTwentyOnePayloadsInFIFOOrder() {
+        let expectation = expectation(description: "20 then 1 payload chunks")
+        expectation.expectedFulfillmentCount = 2
+        var chunks: [[String]] = []
+
+        let batcher = Batcher(
+            initialQueue: [],
+            flushEventThreshold: 100,
+            flushIntervalMs: 0,
+            maxBatchSize: AltertableConfig.defaultMaxBatchSize,
+            altertableQueue: testQueue,
+            sendChunk: { chunk, completion in
+                guard case let .track(payloads) = chunk else {
+                    XCTFail("Expected track chunk")
+                    completion(.success(()))
+                    return
+                }
+                chunks.append(payloads.map(\.event))
+                expectation.fulfill()
+                completion(.success(()))
+            }
+        )
+
+        testQueue.sync {
+            for index in 1 ... 21 {
+                batcher.add(.track(sampleTrackPayload(event: String(format: "event-%02d", index))), autoFlush: true)
+            }
+            batcher.flush(completion: nil)
+        }
+
+        waitForExpectations(timeout: 1.0)
+        XCTAssertEqual(chunks.map(\.count), [20, 1])
+        XCTAssertEqual(chunks.flatMap { $0 }, (1 ... 21).map { String(format: "event-%02d", $0) })
+    }
+
     // MARK: - Mixed types
 
     func testMixedEventTypesProduceSeparateChunks() {
