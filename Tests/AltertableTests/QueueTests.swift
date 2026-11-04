@@ -35,6 +35,12 @@ final class QueueTests: XCTestCase {
         super.tearDown()
     }
 
+    private func finishFlush(_ client: Altertable) {
+        let completed = expectation(description: "All sends and persistence callbacks completed")
+        client.flush { completed.fulfill() }
+        wait(for: [completed], timeout: 2)
+    }
+
     func testQueuePersistence() {
         let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         let fileURL = cacheDir.appendingPathComponent("altertable_queue.json")
@@ -57,8 +63,8 @@ final class QueueTests: XCTestCase {
         let client1 = Altertable(apiKey: "pk_test_1", config: config1, session: session)
         client1.track(event: "persisted_event")
 
-        // track() dispatches async; give the serial queue a moment to write to disk.
-        Thread.sleep(forTimeInterval: 0.1)
+        // Drain track() and its persistence write before constructing another client.
+        _ = client1.currentDistinctId()
 
         var config2 = AltertableConfig(trackingConsent: .pending)
         config2.applyUnitTestImmediateFlush()
@@ -78,6 +84,7 @@ final class QueueTests: XCTestCase {
         client2.configure { $0.trackingConsent = .granted }
 
         waitForExpectations(timeout: 1.0)
+        finishFlush(client2)
     }
 
     func testQueueDropsOldestWhenFull() {
@@ -115,6 +122,7 @@ final class QueueTests: XCTestCase {
 
         client.configure { $0.trackingConsent = .granted }
         waitForExpectations(timeout: 2.0)
+        finishFlush(client)
 
         XCTAssertEqual(flushedEvents.count, maxSize, "Queue should be capped at maxQueueSize")
         // The two oldest events (event_0, event_1) should have been dropped.
@@ -149,6 +157,7 @@ final class QueueTests: XCTestCase {
 
         client.track(event: "retry_event")
         wait(for: [successExp], timeout: 2.0)
+        finishFlush(client)
         XCTAssertGreaterThan(callCount, 1, "Request should have been retried")
     }
 }

@@ -28,6 +28,7 @@ enum APIError: LocalizedError, Sendable {
 final class Requester {
     private let apiKey: String
     private let session: URLSession
+    private let mode: TrackingMode
 
     // `retryBaseDelay` is a test-only override; guard all access through `delayQueue`.
     private let delayQueue = DispatchQueue(label: "ai.altertable.requester.delay")
@@ -37,13 +38,20 @@ final class Requester {
         set { delayQueue.sync { _retryBaseDelay = newValue } }
     }
 
-    init(apiKey: String, requestTimeout: TimeInterval, session: URLSession? = nil) {
+    init(apiKey: String, requestTimeout: TimeInterval, session: URLSession? = nil, mode: TrackingMode = .product) {
         self.apiKey = apiKey
+        self.mode = mode
 
         if let session {
             self.session = session
         } else {
-            let sessionConfig = URLSessionConfiguration.default
+            let sessionConfig = mode == .audience ? URLSessionConfiguration.ephemeral : URLSessionConfiguration.default
+            if mode == .audience {
+                sessionConfig.httpShouldSetCookies = false
+                sessionConfig.httpCookieStorage = nil
+                sessionConfig.urlCredentialStorage = nil
+                sessionConfig.urlCache = nil
+            }
             // Snapshot timeout at init time — safe because init runs on the
             // Altertable serial queue before any concurrent access begins.
             sessionConfig.timeoutIntervalForRequest = requestTimeout
@@ -80,6 +88,7 @@ final class Requester {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.httpShouldHandleCookies = mode != .audience
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         // Use X-API-Key as the primary authentication method
         request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
@@ -106,6 +115,7 @@ final class Requester {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.httpShouldHandleCookies = mode != .audience
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
 

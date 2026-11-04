@@ -196,6 +196,41 @@ Initialize with an `AltertableConfig` object for advanced options.
 
 Events are buffered and sent in HTTP batches (JSON arrays) instead of one request per event. Flushes happen when the buffer hits `flushEventThreshold`, on each `flushIntervalMs` tick while consent is granted, when you call `flush()`, and when the app backgrounds (if `flushOnBackground` is `true`). Failed deliveries that are retryable (e.g. network errors, 5xx, 429) can be re-queued after HTTP-level retries are exhausted.
 
+## Audience measurement
+
+Product analytics is the default. Select audience measurement when constructing a client:
+
+```swift
+let analytics = Altertable(apiKey: "YOUR_API_KEY", config: AltertableConfig(
+    mode: .audience,
+    trackingConsent: .pending
+))
+analytics.screen(name: "Documentation")
+analytics.configure { $0.trackingConsent = .granted }
+```
+
+Audience events send `mode: "audience"`, event name, timestamp, and properties.
+They omit distinct, anonymous, device, and session IDs, and omit `environment`;
+the API key determines the environment. Automatic context is limited to the SDK
+name, SDK version, and release. Screen tracking uses the same audience policy.
+`$url` is reduced to HTTP(S) origin and path, `$referer` to its origin, and
+`$viewport` is removed, including values supplied by callers. Invalid URLs become
+null. URL credentials, queries, and fragments are removed. Query parameters are
+never extracted automatically.
+
+Identity methods (`identify`, `alias`, and `updateTraits`) are ignored and warn
+when debug logging is enabled. State, consent, and queued events remain in memory;
+existing product state and persisted queues are neither loaded nor modified.
+Pending and dismissed consent buffer events until granted; denied consent clears
+the buffer and drops new events. Unsent audience events do not survive a new client
+or app restart. Persist your consent decision in your application if needed and
+supply it when constructing the client.
+
+Mode is fixed for each client. Attempting to change it through `configure` rejects
+the entire update and reports the error to the existing `onError` handler. Create a
+new client to use a different mode. Custom properties and screen names remain your
+responsibility: audience mode does not make arbitrary values safe to collect.
+
 ## License
 
 [MIT](LICENSE)

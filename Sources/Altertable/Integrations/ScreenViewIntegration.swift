@@ -201,7 +201,7 @@ final class ScreenViewIntegration {
 
 #if canImport(UIKit) && !os(watchOS)
     extension UIViewController {
-        @objc private func atbl_viewDidAppear(_ animated: Bool) {
+        @objc fileprivate func atbl_viewDidAppear(_ animated: Bool) {
             // Call original implementation
             atbl_viewDidAppear(animated)
 

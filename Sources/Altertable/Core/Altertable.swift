@@ -71,10 +71,15 @@ public final class Altertable: @unchecked Sendable {
         var internalConfig = config ?? AltertableConfig()
 
         logger = Logger(isDebug: internalConfig.debug)
-        queueStorage = QueueStorage(logger: logger)
-        storage = UserDefaultsStorage()
+        queueStorage = QueueStorage(logger: logger, persistent: internalConfig.mode == .product)
+        storage = internalConfig.mode == .audience ? MemoryStorage() : UserDefaultsStorage()
         sessionManager = SessionManager(storage: storage)
-        requester = Requester(apiKey: apiKey, requestTimeout: internalConfig.requestTimeout, session: session)
+        requester = Requester(
+            apiKey: apiKey,
+            requestTimeout: internalConfig.requestTimeout,
+            session: session,
+            mode: internalConfig.mode
+        )
 
         if let storedDevice = storage.string(forKey: SDKConstants.StorageKeys.deviceId) {
             deviceId = storedDevice
@@ -142,9 +147,13 @@ public final class Altertable: @unchecked Sendable {
     public func track(event: String, properties: [String: JSONValue] = [:]) {
         queue.async { [self] in
             let timestamp = Date().iso8601String()
-            let sessionId = sessionManager.currentSessionId()
+            let isAudience = config.mode == .audience
+            let sessionId = isAudience ? nil : sessionManager.currentSessionId()
 
-            var finalProperties = Context.getSystemProperties()
+            var finalProperties = isAudience ? [
+                SDKConstants.propertyLib: JSONValue(Context.libName),
+                SDKConstants.propertyLibVersion: JSONValue(Context.libVersion),
+            ] : Context.getSystemProperties()
 
             if let release = config.release ??
                 (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String)
@@ -154,13 +163,18 @@ public final class Altertable: @unchecked Sendable {
 
             finalProperties.merge(properties) { _, new in new }
 
+            if isAudience {
+                finalProperties = Audience.prepareProperties(finalProperties)
+            }
+
             let payload = TrackPayload(
+                mode: isAudience ? .audience : nil,
                 timestamp: timestamp,
                 event: event,
-                environment: config.environment,
-                deviceId: deviceId,
-                distinctId: distinctId,
-                anonymousId: anonymousId,
+                environment: isAudience ? nil : config.environment,
+                deviceId: isAudience ? nil : deviceId,
+                distinctId: isAudience ? nil : distinctId,
+                anonymousId: isAudience ? nil : anonymousId,
                 sessionId: sessionId,
                 properties: finalProperties
             )
@@ -190,6 +204,7 @@ public final class Altertable: @unchecked Sendable {
     /// ```
     public func identify(userId: String, traits: [String: JSONValue] = [:]) {
         queue.async { [self] in
+            guard !rejectIdentityCall() else { return }
             do {
                 try Validator.validateUserId(userId)
             } catch {
@@ -237,6 +252,7 @@ public final class Altertable: @unchecked Sendable {
     /// ```
     public func alias(newUserId: String) {
         queue.async { [self] in
+            guard !rejectIdentityCall() else { return }
             do {
                 try Validator.validateUserId(newUserId)
             } catch {
@@ -269,6 +285,7 @@ public final class Altertable: @unchecked Sendable {
     /// ```
     public func updateTraits(_ traits: [String: JSONValue]) {
         queue.async { [self] in
+            guard !rejectIdentityCall() else { return }
             guard anonymousId != nil else {
                 logger.warn("User must be identified with identify() before updating traits.")
                 return
@@ -316,6 +333,7 @@ public final class Altertable: @unchecked Sendable {
     }
 
     /// Updates the configuration after initialization.
+    /// Mode changes reject the entire update and report through `onError`. Create a new client to change modes.
     ///
     /// - Parameter updates: A closure that modifies the configuration in place.
     ///
@@ -336,7 +354,15 @@ public final class Altertable: @unchecked Sendable {
             let frozenFlushIntervalMs = config.flushIntervalMs
             let frozenMaxBatchSize = config.maxBatchSize
 
-            updates(&config)
+            var nextConfig = config
+            updates(&nextConfig)
+            guard nextConfig.mode == config.mode else {
+                let error = ConfigurationError.modeChange
+                logger.warn(error.localizedDescription)
+                config.onError?(error)
+                return
+            }
+            config = nextConfig
 
             // Restore init-only fields (they are only read at init time)
             config.requestTimeout = frozenTimeout
@@ -427,6 +453,15 @@ public final class Altertable: @unchecked Sendable {
             batcher.stopTimer()
             queueStorage.save(batcher.snapshotForPersistence())
         }
+    }
+
+    private func rejectIdentityCall() -> Bool {
+        guard config.mode == .audience else { return false }
+        logger.warn(
+            "Altertable identify(), alias(), and updateTraits() calls were ignored " +
+                "because audience measurement is configured."
+        )
+        return true
     }
 
     private func enqueue(_ request: QueuedRequest) {
