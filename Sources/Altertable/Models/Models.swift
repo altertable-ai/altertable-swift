@@ -19,22 +19,52 @@ struct TrackPayload: Codable, Sendable {
     let anonymousId: String?
     let sessionId: String?
     let properties: [String: JSONValue]
+
+    // Older persisted requests can contain an environment. Decode it for queue
+    // compatibility, but never put it back on the wire: the API key selects it.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(mode, forKey: .mode)
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encode(event, forKey: .event)
+        try container.encodeIfPresent(deviceId, forKey: .deviceId)
+        try container.encodeIfPresent(distinctId, forKey: .distinctId)
+        try container.encodeIfPresent(anonymousId, forKey: .anonymousId)
+        try container.encodeIfPresent(sessionId, forKey: .sessionId)
+        try container.encode(properties, forKey: .properties)
+    }
 }
 
 struct IdentifyPayload: Codable, Sendable {
-    let environment: String
+    let environment: String?
     let deviceId: String
     let distinctId: String
     let anonymousId: String?
     let traits: [String: JSONValue]
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(deviceId, forKey: .deviceId)
+        try container.encode(distinctId, forKey: .distinctId)
+        try container.encodeIfPresent(anonymousId, forKey: .anonymousId)
+        try container.encode(traits, forKey: .traits)
+    }
 }
 
 struct AliasPayload: Codable, Sendable {
-    let environment: String
+    let environment: String?
     let deviceId: String
     let distinctId: String
     let anonymousId: String?
     let newUserId: String
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(deviceId, forKey: .deviceId)
+        try container.encode(distinctId, forKey: .distinctId)
+        try container.encodeIfPresent(anonymousId, forKey: .anonymousId)
+        try container.encode(newUserId, forKey: .newUserId)
+    }
 }
 
 extension TrackPayload: APIPayload {

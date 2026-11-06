@@ -150,7 +150,7 @@ final class AudienceTests: XCTestCase {
         product.track(event: "Product Offline")
         _ = product.currentDistinctId()
         let queueURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("altertable_queue.json")
+            .appendingPathComponent("altertable_queue.a2V5.json")
         let previousQueue = try Data(contentsOf: queueURL)
         // Stored denied consent must not override audience's explicit consent.
         UserDefaults.standard.set("denied", forKey: SDKConstants.StorageKeys.trackingConsent)
@@ -233,7 +233,7 @@ final class AudienceTests: XCTestCase {
         let payloads = try events()
         assertAudience(payloads[0])
         XCTAssertNil(payloads[1]["mode"])
-        XCTAssertEqual(payloads[1]["environment"] as? String, "production")
+        XCTAssertNil(payloads[1]["environment"])
         XCTAssertNotNil(payloads[1]["distinct_id"])
         XCTAssertNotNil(payloads[1]["session_id"])
     }

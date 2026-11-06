@@ -11,8 +11,13 @@ enum TestSupport {
     static func removeDefaultPersistedEventQueue() {
         let paths = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
         guard let directory = paths.first else { return }
-        let fileURL = directory.appendingPathComponent("altertable_queue.json")
-        try? FileManager.default.removeItem(at: fileURL)
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        for fileURL in files where fileURL.lastPathComponent.hasPrefix("altertable_queue") {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+        for key in UserDefaults.standard.dictionaryRepresentation().keys where key.hasPrefix("atbl.v2.") {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
     }
 }
 
