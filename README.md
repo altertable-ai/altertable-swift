@@ -182,7 +182,8 @@ Initialize with an `AltertableConfig` object for advanced options.
 | :--- | :--- | :--- | :--- |
 | `apiKey` | `String` | (Required) | Your project API key. |
 | `baseURL` | `URL` | `https://api.altertable.ai` | The API endpoint URL. |
-| `environment` | `String` | `production` | Environment name (e.g. `staging`). |
+| `mode` | `TrackingMode` | `.product` | Use `.audience` for audience measurement. Fixed for each client. |
+| `environment` | `String` | `production` | Product environment name. Audience mode uses the API key’s environment. |
 | `trackingConsent` | `TrackingConsentState` | `.granted` | Controls if tracking is enabled. |
 | `debug` | `Bool` | `false` | Enables verbose logging. |
 | `requestTimeout` | `TimeInterval` | `10.0` | Network request timeout in seconds. |
@@ -198,7 +199,7 @@ Events are buffered and sent in HTTP batches (JSON arrays) instead of one reques
 
 ## Audience measurement
 
-Product analytics is the default. Select audience measurement when constructing a client:
+Product analytics is the default. Use an environment-bound Product Analytics API key to collect audience events:
 
 ```swift
 let analytics = Altertable(apiKey: "YOUR_API_KEY", config: AltertableConfig(
@@ -209,27 +210,23 @@ analytics.screen(name: "Documentation")
 analytics.configure { $0.trackingConsent = .granted }
 ```
 
-Audience events send `mode: "audience"`, event name, timestamp, and properties.
-They omit distinct, anonymous, device, and session IDs, and omit `environment`;
-the API key determines the environment. Automatic context is limited to the SDK
-name, SDK version, and release. Screen tracking uses the same audience policy.
-`$url` is reduced to HTTP(S) origin and path, `$referer` to its origin, and
-`$viewport` is removed, including values supplied by callers. Invalid URLs become
-null. URL credentials, queries, and fragments are removed. Query parameters are
-never extracted automatically.
+Audience events omit user, anonymous, device, and session IDs. The API key selects
+the environment; `environment` is ignored. `identify`, `alias`, and `updateTraits`
+are ignored, with warnings when `debug` is enabled. Screen tracking remains available.
 
-Identity methods (`identify`, `alias`, and `updateTraits`) are ignored and warn
-when debug logging is enabled. State, consent, and queued events remain in memory;
-existing product state and persisted queues are neither loaded nor modified.
-Pending and dismissed consent buffer events until granted; denied consent clears
-the buffer and drops new events. Unsent audience events do not survive a new client
-or app restart. Persist your consent decision in your application if needed and
-supply it when constructing the client.
+State and queued events stay in memory. Existing product state is untouched, and
+unsent audience events do not survive a new client or app restart. Pending and
+dismissed consent buffer events until granted; denied consent clears the buffer
+and drops new events. If you persist consent in your app, supply it when creating
+the client.
 
-Mode is fixed for each client. Attempting to change it through `configure` rejects
-the entire update and reports the error to the existing `onError` handler. Create a
-new client to use a different mode. Custom properties and screen names remain your
-responsibility: audience mode does not make arbitrary values safe to collect.
+Audience mode limits automatic context to SDK name/version and release, removes
+`$viewport`, reduces `$url` to HTTP(S) origin plus path, and reduces `$referer` to
+origin. Invalid URLs become null. Custom properties, screen names, and URL paths
+can still contain personal information; choose them accordingly.
+
+Create a new client to change modes. A mode change through `configure` rejects
+the entire update and reports an error through the existing `onError` handler.
 
 ## License
 
