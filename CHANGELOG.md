@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0](https://github.com/altertable-ai/altertable-swift/compare/altertable-swift-v0.2.0...altertable-swift-v0.3.0) (2026-11-09)
+
+
+### Features
+
+* add audience measurement mode ([#41](https://github.com/altertable-ai/altertable-swift/issues/41)) ([b3fd27b](https://github.com/altertable-ai/altertable-swift/commit/b3fd27befe5abce0a47fb1ef71b4eccc3d54d478))
+* deprecate client analytics environment routing ([#42](https://github.com/altertable-ai/altertable-swift/issues/42)) ([324e832](https://github.com/altertable-ai/altertable-swift/commit/324e8328e9baf820c1886cfffb20d1685e5f02ef))
+
 ## [0.2.0](https://github.com/altertable-ai/altertable-swift/compare/altertable-swift-v0.1.1...altertable-swift-v0.2.0) (2026-03-25)
 
 
