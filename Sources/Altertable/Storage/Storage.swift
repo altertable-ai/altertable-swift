@@ -29,6 +29,29 @@ final class UserDefaultsStorage: Storage {
     }
 }
 
+/// Isolates product identity and consent by API key.
+final class ScopedStorage: Storage {
+    private let storage: Storage
+    private let prefix: String
+
+    init(storage: Storage, apiKey: String) {
+        self.storage = storage
+        prefix = "atbl.v2.\(apiKey)."
+    }
+
+    func string(forKey key: String) -> String? {
+        storage.string(forKey: prefix + key)
+    }
+
+    func set(_ value: String, forKey key: String) {
+        storage.set(value, forKey: prefix + key)
+    }
+
+    func removeObject(forKey key: String) {
+        storage.removeObject(forKey: prefix + key)
+    }
+}
+
 /// Per-client state that never touches persistent storage.
 final class MemoryStorage: Storage {
     private var values: [String: String] = [:]

@@ -36,8 +36,7 @@ final class QueueTests: XCTestCase {
     }
 
     func testQueuePersistence() {
-        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        let fileURL = cacheDir.appendingPathComponent("altertable_queue.json")
+        let fileURL = QueueStorage.fileURL(apiKey: "pk_test_1")
         try? FileManager.default.removeItem(at: fileURL)
         defer { try? FileManager.default.removeItem(at: fileURL) }
 

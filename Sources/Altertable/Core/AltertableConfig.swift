@@ -32,9 +32,9 @@ public struct AltertableConfig {
     /// - Default: `"https://api.altertable.ai"`
     public var baseURL: URL
 
-    /// The product analytics environment. Audience mode uses the API key's environment.
-    /// - Default: `"production"`
-    public var environment: String
+    /// Deprecated and ignored. The API key selects the environment.
+    @available(*, deprecated, message: "Ignored. Use an environment-bound Product Analytics API key.")
+    public var environment: String = AltertableConfig.defaultEnvironment
 
     /// The tracking consent state.
     /// - Default: `.granted`
@@ -86,7 +86,6 @@ public struct AltertableConfig {
     public init(
         mode: TrackingMode = AltertableConfig.defaultMode,
         baseURL: URL = AltertableConfig.defaultBaseURL,
-        environment: String = AltertableConfig.defaultEnvironment,
         trackingConsent: TrackingConsentState = AltertableConfig.defaultTrackingConsent,
         release: String? = nil,
         onError: ((Error) -> Void)? = nil,
@@ -100,7 +99,6 @@ public struct AltertableConfig {
     ) {
         self.mode = mode
         self.baseURL = baseURL
-        self.environment = environment
         self.trackingConsent = trackingConsent
         self.release = release
         self.onError = onError
@@ -111,6 +109,39 @@ public struct AltertableConfig {
         self.flushEventThreshold = flushEventThreshold
         self.flushIntervalMs = flushIntervalMs
         self.maxBatchSize = maxBatchSize
+    }
+
+    @available(*, deprecated, message: "environment is ignored. Use an environment-bound Product Analytics API key.")
+    public init(
+        mode: TrackingMode = AltertableConfig.defaultMode,
+        baseURL: URL = AltertableConfig.defaultBaseURL,
+        environment: String,
+        trackingConsent: TrackingConsentState = AltertableConfig.defaultTrackingConsent,
+        release: String? = nil,
+        onError: ((Error) -> Void)? = nil,
+        debug: Bool = AltertableConfig.defaultDebug,
+        requestTimeout: TimeInterval = AltertableConfig.defaultRequestTimeout,
+        flushOnBackground: Bool = AltertableConfig.defaultFlushOnBackground,
+        captureScreenViews: Bool = AltertableConfig.defaultCaptureScreenViews,
+        flushEventThreshold: Int = AltertableConfig.defaultFlushEventThreshold,
+        flushIntervalMs: Int = AltertableConfig.defaultFlushIntervalMs,
+        maxBatchSize: Int = AltertableConfig.defaultMaxBatchSize
+    ) {
+        self.init(
+            mode: mode,
+            baseURL: baseURL,
+            trackingConsent: trackingConsent,
+            release: release,
+            onError: onError,
+            debug: debug,
+            requestTimeout: requestTimeout,
+            flushOnBackground: flushOnBackground,
+            captureScreenViews: captureScreenViews,
+            flushEventThreshold: flushEventThreshold,
+            flushIntervalMs: flushIntervalMs,
+            maxBatchSize: maxBatchSize
+        )
+        self.environment = environment
     }
 }
 
@@ -131,9 +162,16 @@ public enum TrackingMode: String, Codable, Sendable {
 
 enum ConfigurationError: LocalizedError {
     case modeChange
+    case storageMigration
 
     var errorDescription: String? {
-        "Create a new Altertable client to change the tracking mode. " +
-            "Events and identities cannot be migrated between modes."
+        switch self {
+        case .modeChange:
+            return "Create a new Altertable client to change the tracking mode. " +
+                "Events and identities cannot be migrated between modes."
+        case .storageMigration:
+            return "Altertable could not migrate stored SDK state. " +
+                "Events are not collected until migration succeeds on a later launch."
+        }
     }
 }

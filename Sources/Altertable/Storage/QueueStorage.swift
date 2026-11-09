@@ -6,24 +6,37 @@
 import Foundation
 
 final class QueueStorage {
+    /// Queue file written by SDK versions that did not scope state by API key.
+    static var legacyFileURL: URL {
+        directory.appendingPathComponent("altertable_queue.json")
+    }
+
+    static func fileURL(apiKey: String) -> URL {
+        let encodedKey = Data(apiKey.utf8).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return directory.appendingPathComponent("altertable_queue.v2.\(encodedKey).json")
+    }
+
+    private static var directory: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+    }
+
     private let fileURL: URL?
     private let logger: Logger
 
-    init(logger: Logger, persistent: Bool = true) {
+    /// - Parameter fileURL: Where to persist the queue, or `nil` to keep it in memory only.
+    init(logger: Logger, fileURL: URL?) {
         self.logger = logger
-        guard persistent else {
-            fileURL = nil
-            return
-        }
-        let paths = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
-        let directory = paths[0]
+        self.fileURL = fileURL
 
         // Ensure directory exists (important for Linux/CI where caches dir may not exist)
-        if !FileManager.default.fileExists(atPath: directory.path) {
+        if let directory = fileURL?.deletingLastPathComponent(),
+           !FileManager.default.fileExists(atPath: directory.path)
+        {
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
         }
-
-        fileURL = directory.appendingPathComponent("altertable_queue.json")
     }
 
     func save(_ queue: [Altertable.QueuedRequest]) {

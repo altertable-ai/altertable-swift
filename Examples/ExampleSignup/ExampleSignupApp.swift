@@ -16,7 +16,6 @@
         @StateObject private var analytics = Altertable(
             apiKey: getRequiredAPIKey(),
             config: AltertableConfig(
-                environment: "production",
                 debug: true
             )
         )

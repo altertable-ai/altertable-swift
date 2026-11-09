@@ -76,7 +76,7 @@ final class CoreTests: XCTestCase {
 
             if let body = request.httpBody, let json = try? TestJSON.firstObject(from: body) {
                 XCTAssertEqual(json["event"] as? String, "test_event")
-                XCTAssertEqual(json["environment"] as? String, "production")
+                XCTAssertNil(json["environment"])
                 XCTAssertNotNil(json["session_id"])
                 XCTAssertNotNil(json["device_id"])
                 XCTAssertNotNil(json["distinct_id"])
@@ -418,7 +418,10 @@ final class CoreTests: XCTestCase {
     func testStoredTrackingConsentDeniedAtStartupDoesNotSend() {
         UserDefaults.standard.set(
             TrackingConsentState.denied.rawValue,
-            forKey: SDKConstants.StorageKeys.trackingConsent
+            forKey: TestSupport.productStorageKey(
+                SDKConstants.StorageKeys.trackingConsent,
+                apiKey: "pk_denied_startup"
+            )
         )
         client = Altertable(apiKey: "pk_denied_startup", config: .unitTest, session: session)
 
@@ -445,7 +448,10 @@ final class CoreTests: XCTestCase {
     func testStoredTrackingConsentPendingAtStartupQueuesThenFlushesOnGrant() {
         UserDefaults.standard.set(
             TrackingConsentState.pending.rawValue,
-            forKey: SDKConstants.StorageKeys.trackingConsent
+            forKey: TestSupport.productStorageKey(
+                SDKConstants.StorageKeys.trackingConsent,
+                apiKey: "pk_pending_startup"
+            )
         )
         client = Altertable(apiKey: "pk_pending_startup", config: .unitTest, session: session)
 
@@ -641,22 +647,25 @@ final class CoreTests: XCTestCase {
 
     // MARK: - configure() fields
 
-    func testConfigureEnvironment() {
+    func testDeprecatedEnvironmentIsIgnoredForEveryProductPayload() {
         var config = AltertableConfig(environment: "staging")
         config.applyUnitTestImmediateFlush()
         client = Altertable(apiKey: "pk_test_123", config: config, session: session)
-        let exp = expectation(description: "Track in new environment")
+        let exp = expectation(description: "All payloads omit environment")
+        exp.expectedFulfillmentCount = 3
         MockURLProtocol.requestHandler = { [self] request in
             if let body = request.httpBody,
                let json = try? TestJSON.firstObject(from: body)
             {
-                XCTAssertEqual(json["environment"] as? String, "development")
+                XCTAssertNil(json["environment"])
             }
             exp.fulfill()
             return successResponse(url: request.url!)
         }
         client.configure { $0.environment = "development" }
         client.track(event: "env_test")
+        client.identify(userId: "user_123")
+        client.alias(newUserId: "user_456")
         wait(for: [exp], timeout: 1.0)
     }
 

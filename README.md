@@ -95,7 +95,6 @@ Updates the configuration after initialization. Use a closure to modify configur
 ```swift
 client.configure { config in
     config.trackingConsent = .granted
-    config.environment = "staging"
     config.debug = true
 }
 ```
@@ -180,10 +179,10 @@ Initialize with an `AltertableConfig` object for advanced options.
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `apiKey` | `String` | (Required) | Your project API key. |
+| `apiKey` | `String` | (Required) | An environment-bound Product Analytics API key. Identity and queued events are stored per key. |
 | `baseURL` | `URL` | `https://api.altertable.ai` | The API endpoint URL. |
 | `mode` | `TrackingMode` | `.product` | `.audience` collects events without identity. Fixed for the client's lifetime. |
-| `environment` | `String` | `production` | Environment name (e.g. `staging`). Ignored in audience mode. |
+| `environment` | `String` | `production` | Deprecated and ignored; the API key selects the environment. |
 | `trackingConsent` | `TrackingConsentState` | `.granted` | Controls if tracking is enabled. |
 | `debug` | `Bool` | `false` | Enables verbose logging. |
 | `requestTimeout` | `TimeInterval` | `10.0` | Network request timeout in seconds. |
@@ -192,6 +191,8 @@ Initialize with an `AltertableConfig` object for advanced options.
 | `flushEventThreshold` | `Int` | `20` | When the number of buffered events reaches this value, the SDK flushes immediately. Init-only. |
 | `flushIntervalMs` | `Int` | `1000` | Periodic flush interval in milliseconds. Init-only. |
 | `maxBatchSize` | `Int` | `20` | Maximum payloads per HTTP request for a given endpoint. Init-only. |
+
+When upgrading from a version that used `environment`, switch to an environment-bound key first (unbound keys cannot deliver without it) and flush pending events with the previous version. The first product client to start adopts the identity and queued events stored by the previous version, so initialize your existing key first.
 
 ## Event batching
 
