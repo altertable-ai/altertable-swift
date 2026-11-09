@@ -19,13 +19,20 @@ public struct AltertableConfig {
     public static let defaultFlushEventThreshold = SDKConstants.defaultFlushEventThreshold
     public static let defaultMaxBatchSize = SDKConstants.defaultMaxBatchSize
 
+    public static let defaultMode: TrackingMode = .product
+
     // MARK: - Properties
+
+    /// Collection policy. Defaults to `.product`.
+    /// Audience mode omits client identifiers and uses memory-only state and queues.
+    /// Create a new client to change modes.
+    public var mode: TrackingMode
 
     /// The base URL of the Altertable API.
     /// - Default: `"https://api.altertable.ai"`
     public var baseURL: URL
 
-    /// The environment of the application.
+    /// The product analytics environment. Audience mode uses the API key's environment.
     /// - Default: `"production"`
     public var environment: String
 
@@ -77,6 +84,7 @@ public struct AltertableConfig {
     public var maxBatchSize: Int
 
     public init(
+        mode: TrackingMode = AltertableConfig.defaultMode,
         baseURL: URL = AltertableConfig.defaultBaseURL,
         environment: String = AltertableConfig.defaultEnvironment,
         trackingConsent: TrackingConsentState = AltertableConfig.defaultTrackingConsent,
@@ -90,6 +98,7 @@ public struct AltertableConfig {
         flushIntervalMs: Int = AltertableConfig.defaultFlushIntervalMs,
         maxBatchSize: Int = AltertableConfig.defaultMaxBatchSize
     ) {
+        self.mode = mode
         self.baseURL = baseURL
         self.environment = environment
         self.trackingConsent = trackingConsent
@@ -110,4 +119,21 @@ public enum TrackingConsentState: String, Codable, Sendable {
     case denied
     case pending
     case dismissed
+}
+
+/// Collection intent. Audience mode omits identity and uses memory-only state.
+public enum TrackingMode: String, Codable, Sendable {
+    /// Product analytics with client identities.
+    case product
+    /// Audience events without client identifiers. Requires an environment-bound API key.
+    case audience
+}
+
+enum ConfigurationError: LocalizedError {
+    case modeChange
+
+    var errorDescription: String? {
+        "Create a new Altertable client to change the tracking mode. " +
+            "Events and identities cannot be migrated between modes."
+    }
 }

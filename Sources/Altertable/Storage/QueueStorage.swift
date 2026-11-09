@@ -6,11 +6,15 @@
 import Foundation
 
 final class QueueStorage {
-    private let fileURL: URL
+    private let fileURL: URL?
     private let logger: Logger
 
-    init(logger: Logger) {
+    init(logger: Logger, persistent: Bool = true) {
         self.logger = logger
+        guard persistent else {
+            fileURL = nil
+            return
+        }
         let paths = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
         let directory = paths[0]
 
@@ -23,6 +27,7 @@ final class QueueStorage {
     }
 
     func save(_ queue: [Altertable.QueuedRequest]) {
+        guard let fileURL else { return }
         do {
             let data = try JSONEncoder().encode(queue)
             try data.write(to: fileURL)
@@ -32,6 +37,7 @@ final class QueueStorage {
     }
 
     func load() -> [Altertable.QueuedRequest] {
+        guard let fileURL else { return [] }
         do {
             let data = try Data(contentsOf: fileURL)
             return try JSONDecoder().decode([Altertable.QueuedRequest].self, from: data)

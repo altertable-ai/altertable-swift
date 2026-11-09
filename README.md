@@ -182,7 +182,8 @@ Initialize with an `AltertableConfig` object for advanced options.
 | :--- | :--- | :--- | :--- |
 | `apiKey` | `String` | (Required) | Your project API key. |
 | `baseURL` | `URL` | `https://api.altertable.ai` | The API endpoint URL. |
-| `environment` | `String` | `production` | Environment name (e.g. `staging`). |
+| `mode` | `TrackingMode` | `.product` | `.audience` collects events without identity. Fixed for the client's lifetime. |
+| `environment` | `String` | `production` | Environment name (e.g. `staging`). Ignored in audience mode. |
 | `trackingConsent` | `TrackingConsentState` | `.granted` | Controls if tracking is enabled. |
 | `debug` | `Bool` | `false` | Enables verbose logging. |
 | `requestTimeout` | `TimeInterval` | `10.0` | Network request timeout in seconds. |
@@ -195,6 +196,16 @@ Initialize with an `AltertableConfig` object for advanced options.
 ## Event batching
 
 Events are buffered and sent in HTTP batches (JSON arrays) instead of one request per event. Flushes happen when the buffer hits `flushEventThreshold`, on each `flushIntervalMs` tick while consent is granted, when you call `flush()`, and when the app backgrounds (if `flushOnBackground` is `true`). Failed deliveries that are retryable (e.g. network errors, 5xx, 429) can be re-queued after HTTP-level retries are exhausted.
+
+## Audience measurement
+
+Set `mode: .audience` to collect events without user, anonymous, device, or session IDs. Audience mode requires an environment-bound Product Analytics API key:
+
+```swift
+let analytics = Altertable(apiKey: "YOUR_API_KEY", config: AltertableConfig(mode: .audience))
+```
+
+Audience clients ignore `identify`, `alias`, and `updateTraits`, keep state and queued events in memory only, and send no cookies or credentials. Automatic context is limited to SDK metadata and release; `$url` is reduced to origin plus path, `$referer` to origin, and `$viewport` is removed. Custom properties are sent as-is, so keep personal data out of them. Create a new client to change modes.
 
 ## License
 

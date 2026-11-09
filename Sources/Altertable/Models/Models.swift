@@ -10,13 +10,14 @@ protocol APIPayload: Encodable {
 }
 
 struct TrackPayload: Codable, Sendable {
+    var mode: TrackingMode?
     let timestamp: String
     let event: String
-    let environment: String
-    let deviceId: String
-    let distinctId: String
+    let environment: String?
+    let deviceId: String?
+    let distinctId: String?
     let anonymousId: String?
-    let sessionId: String
+    let sessionId: String?
     let properties: [String: JSONValue]
 }
 

@@ -82,6 +82,30 @@ final class IntegrationTests: XCTestCase {
         wait(for: [noError], timeout: 3.0)
     }
 
+    func testAudienceTrackSucceedsWithoutProductIdentity() {
+        let delivered = expectation(description: "Audience event delivered")
+        let noError = expectation(description: "No audience delivery error")
+        noError.isInverted = true
+
+        let config = AltertableConfig(
+            mode: .audience,
+            baseURL: IntegrationTests.mockBaseURL,
+            environment: "ignored-audience-environment",
+            onError: { error in
+                XCTFail("Unexpected audience SDK error: \(error)")
+                noError.fulfill()
+            },
+            captureScreenViews: false
+        )
+        let client = Altertable(apiKey: IntegrationTests.apiKey, config: config)
+
+        client.identify(userId: "must-not-be-sent")
+        client.track(event: "Audience Button Clicked", properties: ["button": "signup"])
+        client.flush { delivered.fulfill() }
+
+        wait(for: [delivered, noError], timeout: 3.0)
+    }
+
     // MARK: - identify
 
     func testIdentifySucceeds() {
@@ -122,18 +146,20 @@ final class IntegrationTests: XCTestCase {
 
     // MARK: - Error cases
 
-    func testUnknownEnvironmentErrors() {
-        let errorExp = expectation(description: "Error for unknown environment")
+    func testMissingEndpointErrors() {
+        let errorExp = expectation(description: "Error for missing endpoint")
 
         let config = AltertableConfig(
-            baseURL: IntegrationTests.mockBaseURL,
-            environment: "nonexistent-env",
-            onError: { _ in errorExp.fulfill() }
+            baseURL: IntegrationTests.mockBaseURL.appendingPathComponent("missing"),
+            onError: { error in
+                XCTAssertEqual(error.localizedDescription, "HTTP error 404")
+                errorExp.fulfill()
+            }
         )
         let client = Altertable(apiKey: IntegrationTests.apiKey, config: config)
-        client.setRetryBaseDelay(0.1)
 
         client.track(event: "should_fail")
+        client.flush()
 
         wait(for: [errorExp], timeout: 5.0)
     }

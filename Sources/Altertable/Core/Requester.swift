@@ -37,13 +37,20 @@ final class Requester {
         set { delayQueue.sync { _retryBaseDelay = newValue } }
     }
 
-    init(apiKey: String, requestTimeout: TimeInterval, session: URLSession? = nil) {
+    init(apiKey: String, requestTimeout: TimeInterval, session: URLSession? = nil, mode: TrackingMode = .product) {
         self.apiKey = apiKey
 
         if let session {
             self.session = session
         } else {
-            let sessionConfig = URLSessionConfiguration.default
+            let sessionConfig = mode == .audience ? URLSessionConfiguration.ephemeral : URLSessionConfiguration.default
+            if mode == .audience {
+                // Audience requests never send, store, or share cookies, credentials, or cached responses.
+                sessionConfig.httpShouldSetCookies = false
+                sessionConfig.httpCookieStorage = nil
+                sessionConfig.urlCredentialStorage = nil
+                sessionConfig.urlCache = nil
+            }
             // Snapshot timeout at init time — safe because init runs on the
             // Altertable serial queue before any concurrent access begins.
             sessionConfig.timeoutIntervalForRequest = requestTimeout
