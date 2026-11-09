@@ -82,6 +82,30 @@ final class IntegrationTests: XCTestCase {
         wait(for: [noError], timeout: 3.0)
     }
 
+    func testAudienceTrackSucceedsWithoutProductIdentity() {
+        let delivered = expectation(description: "Audience event delivered")
+        let noError = expectation(description: "No audience delivery error")
+        noError.isInverted = true
+
+        let config = AltertableConfig(
+            mode: .audience,
+            baseURL: IntegrationTests.mockBaseURL,
+            environment: "ignored-audience-environment",
+            onError: { error in
+                XCTFail("Unexpected audience SDK error: \(error)")
+                noError.fulfill()
+            },
+            captureScreenViews: false
+        )
+        let client = Altertable(apiKey: IntegrationTests.apiKey, config: config)
+
+        client.identify(userId: "must-not-be-sent")
+        client.track(event: "Audience Button Clicked", properties: ["button": "signup"])
+        client.flush { delivered.fulfill() }
+
+        wait(for: [delivered, noError], timeout: 3.0)
+    }
+
     // MARK: - identify
 
     func testIdentifySucceeds() {

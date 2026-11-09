@@ -220,6 +220,9 @@ dismissed consent buffer events until granted; denied consent clears the buffer
 and drops new events. If you persist consent in your app, supply it when creating
 the client.
 
+Audience delivery uses an ephemeral URL session and disables cookies, credential
+storage, and URL caching. This applies to normal sends and HTTP retries.
+
 Audience mode limits automatic context to SDK name/version and release, removes
 `$viewport`, reduces `$url` to HTTP(S) origin plus path, and reduces `$referer` to
 origin. Invalid URLs become null. Custom properties, screen names, and URL paths
