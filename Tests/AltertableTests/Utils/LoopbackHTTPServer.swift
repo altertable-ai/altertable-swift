@@ -44,7 +44,8 @@ final class LoopbackHTTPServer {
         listener = descriptor
 
         var reuseAddress: Int32 = 1
-        guard setsockopt(descriptor, SOL_SOCKET, SO_REUSEADDR, &reuseAddress, socklen_t(MemoryLayout.size(ofValue: reuseAddress))) == 0 else {
+        let optionLength = socklen_t(MemoryLayout.size(ofValue: reuseAddress))
+        guard setsockopt(descriptor, SOL_SOCKET, SO_REUSEADDR, &reuseAddress, optionLength) == 0 else {
             close(descriptor)
             throw POSIXError(.ENFILE)
         }

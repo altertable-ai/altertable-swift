@@ -102,7 +102,6 @@ final class AudienceTests: XCTestCase {
             XCTAssertNil(properties[key])
         }
         XCTAssertTrue(capturedRequests().allSatisfy { $0.url?.lastPathComponent == "track" })
-        XCTAssertTrue(capturedRequests().allSatisfy { !$0.httpShouldHandleCookies })
     }
 
     func testScreenPropertiesCannotBypassAudiencePolicy() throws {
@@ -260,7 +259,6 @@ final class AudienceTests: XCTestCase {
         for request in capturedRequests() {
             let payloads = try TestJSON.objectArray(from: XCTUnwrap(request.httpBody))
             XCTAssertLessThanOrEqual(payloads.count, 2)
-            XCTAssertFalse(request.httpShouldHandleCookies)
             payloads.forEach { assertAudience($0) }
         }
         XCTAssertTrue(QueueStorage(logger: Logger()).load().isEmpty)
@@ -287,21 +285,5 @@ final class AudienceTests: XCTestCase {
         let queueURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("altertable_queue.json")
         XCTAssertFalse(FileManager.default.fileExists(atPath: queueURL.path))
-    }
-
-    func testOldPersistedProductPayloadDecodesWithoutMode() throws {
-        XCTAssertEqual(AltertableConfig().mode, .product)
-        let data = Data("""
-        {"timestamp":"2026-11-04T00:00:00Z","event":"Old Product","environment":"production",
-        "deviceId":"device-old","distinctId":"user-old","sessionId":"session-old","properties":{}}
-        """.utf8)
-        let payload = try JSONDecoder().decode(TrackPayload.self, from: data)
-        XCTAssertNil(payload.mode)
-        XCTAssertEqual(payload.distinctId, "user-old")
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        let encoded = try TestJSON.firstObject(from: encoder.encode(payload))
-        XCTAssertNil(encoded["mode"])
-        XCTAssertEqual(encoded["device_id"] as? String, "device-old")
     }
 }

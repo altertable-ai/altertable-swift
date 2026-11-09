@@ -28,7 +28,6 @@ enum APIError: LocalizedError, Sendable {
 final class Requester {
     private let apiKey: String
     private let session: URLSession
-    private let mode: TrackingMode
 
     // `retryBaseDelay` is a test-only override; guard all access through `delayQueue`.
     private let delayQueue = DispatchQueue(label: "ai.altertable.requester.delay")
@@ -40,13 +39,13 @@ final class Requester {
 
     init(apiKey: String, requestTimeout: TimeInterval, session: URLSession? = nil, mode: TrackingMode = .product) {
         self.apiKey = apiKey
-        self.mode = mode
 
         if let session {
             self.session = session
         } else {
             let sessionConfig = mode == .audience ? URLSessionConfiguration.ephemeral : URLSessionConfiguration.default
             if mode == .audience {
+                // Audience requests never send, store, or share cookies, credentials, or cached responses.
                 sessionConfig.httpShouldSetCookies = false
                 sessionConfig.httpCookieStorage = nil
                 sessionConfig.urlCredentialStorage = nil
@@ -88,7 +87,6 @@ final class Requester {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.httpShouldHandleCookies = mode != .audience
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         // Use X-API-Key as the primary authentication method
         request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
@@ -115,7 +113,6 @@ final class Requester {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.httpShouldHandleCookies = mode != .audience
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
 

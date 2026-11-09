@@ -182,8 +182,8 @@ Initialize with an `AltertableConfig` object for advanced options.
 | :--- | :--- | :--- | :--- |
 | `apiKey` | `String` | (Required) | Your project API key. |
 | `baseURL` | `URL` | `https://api.altertable.ai` | The API endpoint URL. |
-| `mode` | `TrackingMode` | `.product` | Use `.audience` for audience measurement. Fixed for each client. |
-| `environment` | `String` | `production` | Product environment name. Audience mode uses the API key’s environment. |
+| `mode` | `TrackingMode` | `.product` | `.audience` collects events without identity. Fixed for the client's lifetime. |
+| `environment` | `String` | `production` | Environment name (e.g. `staging`). Ignored in audience mode. |
 | `trackingConsent` | `TrackingConsentState` | `.granted` | Controls if tracking is enabled. |
 | `debug` | `Bool` | `false` | Enables verbose logging. |
 | `requestTimeout` | `TimeInterval` | `10.0` | Network request timeout in seconds. |
@@ -199,37 +199,13 @@ Events are buffered and sent in HTTP batches (JSON arrays) instead of one reques
 
 ## Audience measurement
 
-Product analytics is the default. Use an environment-bound Product Analytics API key to collect audience events:
+Set `mode: .audience` to collect events without user, anonymous, device, or session IDs. Audience mode requires an environment-bound Product Analytics API key:
 
 ```swift
-let analytics = Altertable(apiKey: "YOUR_API_KEY", config: AltertableConfig(
-    mode: .audience,
-    trackingConsent: .pending
-))
-analytics.screen(name: "Documentation")
-analytics.configure { $0.trackingConsent = .granted }
+let analytics = Altertable(apiKey: "YOUR_API_KEY", config: AltertableConfig(mode: .audience))
 ```
 
-Audience events omit user, anonymous, device, and session IDs. The API key selects
-the environment; `environment` is ignored. `identify`, `alias`, and `updateTraits`
-are ignored, with warnings when `debug` is enabled. Screen tracking remains available.
-
-State and queued events stay in memory. Existing product state is untouched, and
-unsent audience events do not survive a new client or app restart. Pending and
-dismissed consent buffer events until granted; denied consent clears the buffer
-and drops new events. If you persist consent in your app, supply it when creating
-the client.
-
-Audience delivery uses an ephemeral URL session and disables cookies, credential
-storage, and URL caching. This applies to normal sends and HTTP retries.
-
-Audience mode limits automatic context to SDK name/version and release, removes
-`$viewport`, reduces `$url` to HTTP(S) origin plus path, and reduces `$referer` to
-origin. Invalid URLs become null. Custom properties, screen names, and URL paths
-can still contain personal information; choose them accordingly.
-
-Create a new client to change modes. A mode change through `configure` rejects
-the entire update and reports an error through the existing `onError` handler.
+Audience clients ignore `identify`, `alias`, and `updateTraits`, keep state and queued events in memory only, and send no cookies or credentials. Automatic context is limited to SDK metadata and release; `$url` is reduced to origin plus path, `$referer` to origin, and `$viewport` is removed. Custom properties are sent as-is, so keep personal data out of them. Create a new client to change modes.
 
 ## License
 
