@@ -13,7 +13,6 @@ final class BatcherTests: XCTestCase {
         TrackPayload(
             timestamp: "2020-01-01T00:00:00Z",
             event: event,
-            environment: "test",
             deviceId: "device-1",
             distinctId: "anonymous-1",
             anonymousId: nil,
@@ -24,7 +23,6 @@ final class BatcherTests: XCTestCase {
 
     private func sampleIdentifyPayload(distinctId: String) -> IdentifyPayload {
         IdentifyPayload(
-            environment: "test",
             deviceId: "device-1",
             distinctId: distinctId,
             anonymousId: "anonymous-1",

@@ -7,7 +7,7 @@ import Foundation
 @testable import Altertable
 
 enum TestSupport {
-    /// Matches QueueStorage’s default file path so tests do not replay stale events between runs.
+    /// Removes persisted queues and API-key-scoped state so tests do not replay stale events between runs.
     static func removeDefaultPersistedEventQueue() {
         let paths = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
         guard let directory = paths.first else { return }
@@ -18,6 +18,18 @@ enum TestSupport {
         for key in UserDefaults.standard.dictionaryRepresentation().keys where key.hasPrefix("atbl.v2.") {
             UserDefaults.standard.removeObject(forKey: key)
         }
+    }
+
+    /// The UserDefaults key a product client uses for `key` under `apiKey`.
+    static func productStorageKey(_ key: String, apiKey: String) -> String {
+        "atbl.v2.\(apiKey).\(key)"
+    }
+
+    /// Every SDK value currently stored in UserDefaults, legacy and API-key-scoped.
+    static func storedSDKState() -> [String: String] {
+        UserDefaults.standard.dictionaryRepresentation()
+            .filter { $0.key.hasPrefix("atbl.") }
+            .compactMapValues { $0 as? String }
     }
 }
 
@@ -37,13 +49,11 @@ extension AltertableConfig {
     /// Unit-test batching defaults with selected production options overridden.
     static func makeUnitTest(
         captureScreenViews: Bool? = nil,
-        trackingConsent: TrackingConsentState? = nil,
-        environment: String? = nil
+        trackingConsent: TrackingConsentState? = nil
     ) -> AltertableConfig {
         var configuration = AltertableConfig()
         if let captureScreenViews { configuration.captureScreenViews = captureScreenViews }
         if let trackingConsent { configuration.trackingConsent = trackingConsent }
-        if let environment { configuration.environment = environment }
         configuration.applyUnitTestImmediateFlush()
         return configuration
     }

@@ -149,12 +149,12 @@ final class AudienceTests: XCTestCase {
         product.identify(userId: "signed-in")
         product.track(event: "Product Offline")
         _ = product.currentDistinctId()
-        let queueURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("altertable_queue.a2V5.json")
+        let queueURL = QueueStorage.fileURL(apiKey: "key")
         let previousQueue = try Data(contentsOf: queueURL)
         // Stored denied consent must not override audience's explicit consent.
-        UserDefaults.standard.set("denied", forKey: SDKConstants.StorageKeys.trackingConsent)
-        let previousState = SDKConstants.StorageKeys.all.map { UserDefaults.standard.string(forKey: $0) }
+        let consentKey = TestSupport.productStorageKey(SDKConstants.StorageKeys.trackingConsent, apiKey: "key")
+        UserDefaults.standard.set("denied", forKey: consentKey)
+        let previousState = TestSupport.storedSDKState()
         let audience = start()
         audience.track(event: "Audience Fresh")
         flush(audience)
@@ -163,10 +163,10 @@ final class AudienceTests: XCTestCase {
         audience.reset(resetDeviceId: true, resetTrackingConsent: true)
         _ = audience.currentDistinctId()
         XCTAssertEqual(try Data(contentsOf: queueURL), previousQueue)
-        XCTAssertEqual(SDKConstants.StorageKeys.all.map { UserDefaults.standard.string(forKey: $0) }, previousState)
+        XCTAssertEqual(TestSupport.storedSDKState(), previousState)
         XCTAssertEqual(try events().compactMap { $0["event"] as? String }, ["Audience Fresh"])
         // Product can still restore its original queue after audience collection.
-        UserDefaults.standard.set("pending", forKey: SDKConstants.StorageKeys.trackingConsent)
+        UserDefaults.standard.set("pending", forKey: consentKey)
         let restoredProduct = start(mode: .product, consent: .pending)
         restoredProduct.configure { $0.trackingConsent = .granted }
         flush(restoredProduct)
@@ -185,7 +185,7 @@ final class AudienceTests: XCTestCase {
         }
         XCTAssertEqual(try events().compactMap { $0["event"] as? String }, ["pending", "dismissed"])
         try events().forEach { assertAudience($0) }
-        XCTAssertTrue(QueueStorage(logger: Logger()).load().isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: QueueStorage.fileURL(apiKey: "key").path))
     }
 
     func testDeniedClearsBufferedEventsAndRegrantResumes() throws {
@@ -209,12 +209,8 @@ final class AudienceTests: XCTestCase {
         second.track(event: "New Client")
         flush(second)
         XCTAssertEqual(try events().compactMap { $0["event"] as? String }, ["New Client"])
-        XCTAssertFalse(FileManager.default.fileExists(atPath: FileManager.default.urls(
-            for: .cachesDirectory,
-            in: .userDomainMask
-        )[0]
-            .appendingPathComponent("altertable_queue.json").path))
-        XCTAssertTrue(SDKConstants.StorageKeys.all.allSatisfy { UserDefaults.standard.object(forKey: $0) == nil })
+        XCTAssertFalse(FileManager.default.fileExists(atPath: QueueStorage.fileURL(apiKey: "key").path))
+        XCTAssertTrue(TestSupport.storedSDKState().isEmpty)
     }
 
     func testModeChangesRejectEntireUpdateInBothDirections() throws {
@@ -261,7 +257,7 @@ final class AudienceTests: XCTestCase {
             XCTAssertLessThanOrEqual(payloads.count, 2)
             payloads.forEach { assertAudience($0) }
         }
-        XCTAssertTrue(QueueStorage(logger: Logger()).load().isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: QueueStorage.fileURL(apiKey: "key").path))
     }
 
     func testExhaustedHTTPRetriesRequeueAudienceBatchInMemory() throws {
@@ -282,8 +278,6 @@ final class AudienceTests: XCTestCase {
         let normalizedBodies = try events().map { try JSONSerialization.data(withJSONObject: $0, options: .sortedKeys) }
         XCTAssertEqual(Set(normalizedBodies).count, 1)
         try events().forEach { assertAudience($0) }
-        let queueURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("altertable_queue.json")
-        XCTAssertFalse(FileManager.default.fileExists(atPath: queueURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: QueueStorage.fileURL(apiKey: "key").path))
     }
 }

@@ -163,11 +163,13 @@ final class IntegrationTests: XCTestCase {
 
         wait(for: [errorExp], timeout: 5.0)
     }
+
     func testInvalidApiKeyErrors() {
         let errorExp = expectation(description: "Error for invalid API key")
 
         let config = AltertableConfig(
             baseURL: IntegrationTests.mockBaseURL,
+            environment: IntegrationTests.environment,
             onError: { _ in errorExp.fulfill() }
         )
         let client = Altertable(apiKey: "invalid_key_xyz", config: config)

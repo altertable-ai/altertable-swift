@@ -31,7 +31,8 @@ public final class Altertable: @unchecked Sendable {
     private var deviceId: String
 
     private let queueStorage: QueueStorage
-    private let productStorageReady: Bool
+    /// Set when legacy product state could not be adopted; product collection stays off for this launch.
+    private let storageMigrationFailed: Bool
 
     /// Lazy so the send closure can capture `[weak self]` after initialization completes.
     private lazy var batcher: Batcher = makeBatcher()
@@ -70,33 +71,21 @@ public final class Altertable: @unchecked Sendable {
         var internalConfig = config ?? AltertableConfig()
 
         logger = Logger(isDebug: internalConfig.debug)
-        if internalConfig.mode == .audience {
-            storage = MemoryStorage()
-            queueStorage = QueueStorage(logger: logger, persistent: false)
-            productStorageReady = true
+        let productStorage = ScopedStorage(storage: UserDefaultsStorage(), apiKey: apiKey)
+        let productQueueURL = QueueStorage.fileURL(apiKey: apiKey)
+        storageMigrationFailed = internalConfig.mode == .product && !LegacyStorageMigration.run(
+            apiKey: apiKey,
+            legacy: UserDefaultsStorage(),
+            destination: productStorage,
+            destinationQueueURL: productQueueURL
+        )
+        if internalConfig.mode == .product, !storageMigrationFailed {
+            storage = productStorage
+            queueStorage = QueueStorage(logger: logger, fileURL: productQueueURL)
         } else {
-            let productStorage = NamespacedStorage(
-                storage: UserDefaultsStorage(),
-                apiKey: apiKey,
-                hasProductQueueDestination: QueueStorage.persistentQueueExists(apiKey: apiKey)
-            )
-            let productQueueStorage = QueueStorage(
-                apiKey: apiKey,
-                logger: logger,
-                migrateLegacy: productStorage.shouldMigrateLegacy,
-                overwriteLegacyMigrationDestination: productStorage.shouldMigrateLegacy
-            )
-            let copiedLegacyState = productStorage.legacyMigrationSucceeded && productQueueStorage.legacyMigrationSucceeded
-            productStorageReady = copiedLegacyState && productStorage.completeLegacyAdoption(
-                queueMigrationSucceeded: productQueueStorage.legacyMigrationSucceeded
-            )
-            if productStorageReady {
-                storage = productStorage
-                queueStorage = productQueueStorage
-            } else {
-                storage = MemoryStorage()
-                queueStorage = QueueStorage(logger: logger, persistent: false)
-            }
+            // Audience clients, and product clients that must retry migration later, never touch product stores.
+            storage = MemoryStorage()
+            queueStorage = QueueStorage(logger: logger, fileURL: nil)
         }
         sessionManager = SessionManager(storage: storage)
         requester = Requester(
@@ -133,15 +122,13 @@ public final class Altertable: @unchecked Sendable {
         // Persisted consent must drive runtime `config` before any public API checks `config.trackingConsent`.
         self.config = internalConfig
 
-        if !productStorageReady {
-            let error = ConfigurationError.storageMigration
-            logger.error(error.localizedDescription)
-            internalConfig.onError?(error)
-        }
-
         let consentAtLaunch = internalConfig.trackingConsent
         queue.async { [self] in
-            guard productStorageReady || self.config.mode == .audience else { return }
+            if storageMigrationFailed {
+                let error = ConfigurationError.storageMigration
+                logger.error(error.localizedDescription)
+                self.config.onError?(error)
+            }
             _ = batcher
             applyTrackingConsentToBatcherAndPersistQueue(consentAtLaunch)
         }
@@ -178,7 +165,6 @@ public final class Altertable: @unchecked Sendable {
     /// ```
     public func track(event: String, properties: [String: JSONValue] = [:]) {
         queue.async { [self] in
-            guard !rejectProductStorageCall() else { return }
             let timestamp = Date().iso8601String()
             let isAudience = config.mode == .audience
             let sessionId = isAudience ? nil : sessionManager.currentSessionId()
@@ -204,7 +190,6 @@ public final class Altertable: @unchecked Sendable {
                 mode: isAudience ? .audience : nil,
                 timestamp: timestamp,
                 event: event,
-                environment: nil,
                 deviceId: isAudience ? nil : deviceId,
                 distinctId: isAudience ? nil : distinctId,
                 anonymousId: isAudience ? nil : anonymousId,
@@ -264,7 +249,6 @@ public final class Altertable: @unchecked Sendable {
             }
 
             let payload = IdentifyPayload(
-                environment: nil,
                 deviceId: deviceId,
                 distinctId: distinctId,
                 anonymousId: anonymousId,
@@ -295,7 +279,6 @@ public final class Altertable: @unchecked Sendable {
             }
 
             let payload = AliasPayload(
-                environment: nil,
                 deviceId: deviceId,
                 distinctId: distinctId,
                 anonymousId: anonymousId,
@@ -325,7 +308,6 @@ public final class Altertable: @unchecked Sendable {
             }
 
             let payload = IdentifyPayload(
-                environment: nil,
                 deviceId: deviceId,
                 distinctId: distinctId,
                 anonymousId: anonymousId,
@@ -352,7 +334,6 @@ public final class Altertable: @unchecked Sendable {
     /// ```
     public func reset(resetDeviceId: Bool = false, resetTrackingConsent: Bool = false) {
         queue.async { [self] in
-            guard !rejectProductStorageCall() else { return }
             _reset(resetDeviceId: resetDeviceId)
 
             if resetTrackingConsent {
@@ -380,7 +361,6 @@ public final class Altertable: @unchecked Sendable {
     /// ```
     public func configure(_ updates: @escaping (inout AltertableConfig) -> Void) {
         queue.async { [self] in
-            guard !rejectProductStorageCall() else { return }
             let previousConsent = config.trackingConsent
             // Snapshot init-only fields that cannot be changed after initialization
             let frozenTimeout = config.requestTimeout
@@ -445,10 +425,6 @@ public final class Altertable: @unchecked Sendable {
     /// ```
     public func flush(completion: (() -> Void)? = nil) {
         queue.async { [self] in
-            guard !rejectProductStorageCall() else {
-                completion?()
-                return
-            }
             guard config.trackingConsent == .granted else {
                 completion?()
                 return
@@ -495,7 +471,6 @@ public final class Altertable: @unchecked Sendable {
     }
 
     private func rejectIdentityCall() -> Bool {
-        guard !rejectProductStorageCall() else { return true }
         guard config.mode == .audience else { return false }
         logger.warn(
             "Altertable identify(), alias(), and updateTraits() calls were ignored " +
@@ -504,16 +479,8 @@ public final class Altertable: @unchecked Sendable {
         return true
     }
 
-    private func rejectProductStorageCall() -> Bool {
-        guard config.mode == .product, !productStorageReady else { return false }
-        let error = ConfigurationError.storageMigration
-        logger.error(error.localizedDescription)
-        config.onError?(error)
-        return true
-    }
-
     private func enqueue(_ request: QueuedRequest) {
-        if config.trackingConsent == .denied {
+        if config.trackingConsent == .denied || storageMigrationFailed {
             return
         }
 
@@ -533,7 +500,7 @@ public final class Altertable: @unchecked Sendable {
 
     private func makeBatcher() -> Batcher {
         Batcher(
-            initialQueue: productStorageReady || config.mode == .audience ? queueStorage.load() : [],
+            initialQueue: queueStorage.load(),
             flushEventThreshold: config.flushEventThreshold,
             flushIntervalMs: config.flushIntervalMs,
             maxBatchSize: config.maxBatchSize,

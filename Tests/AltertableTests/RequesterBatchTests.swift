@@ -50,7 +50,6 @@ final class RequesterBatchTests: XCTestCase {
             TrackPayload(
                 timestamp: "t",
                 event: "a",
-                environment: "e",
                 deviceId: "d",
                 distinctId: "u",
                 anonymousId: nil,
@@ -60,7 +59,6 @@ final class RequesterBatchTests: XCTestCase {
             TrackPayload(
                 timestamp: "t",
                 event: "b",
-                environment: "e",
                 deviceId: "d",
                 distinctId: "u",
                 anonymousId: nil,

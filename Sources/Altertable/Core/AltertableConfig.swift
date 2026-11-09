@@ -32,13 +32,9 @@ public struct AltertableConfig {
     /// - Default: `"https://api.altertable.ai"`
     public var baseURL: URL
 
-    /// The product analytics environment.
-    ///
-    /// - Deprecated: The API key determines the environment. This value is accepted for source
-    ///   compatibility and ignored by all requests and persisted state.
-    /// - Default: `"production"`
-    @available(*, deprecated, message: "The API key determines the environment. Remove this setting.")
-    public var environment: String
+    /// Deprecated and ignored. The API key selects the environment.
+    @available(*, deprecated, message: "Ignored. Use an environment-bound Product Analytics API key.")
+    public var environment: String = AltertableConfig.defaultEnvironment
 
     /// The tracking consent state.
     /// - Default: `.granted`
@@ -103,7 +99,6 @@ public struct AltertableConfig {
     ) {
         self.mode = mode
         self.baseURL = baseURL
-        self.environment = AltertableConfig.defaultEnvironment
         self.trackingConsent = trackingConsent
         self.release = release
         self.onError = onError
@@ -116,11 +111,11 @@ public struct AltertableConfig {
         self.maxBatchSize = maxBatchSize
     }
 
-    @available(*, deprecated, message: "The API key determines the environment. Remove the environment argument.")
+    @available(*, deprecated, message: "environment is ignored. Use an environment-bound Product Analytics API key.")
     public init(
         mode: TrackingMode = AltertableConfig.defaultMode,
         baseURL: URL = AltertableConfig.defaultBaseURL,
-        environment: String = AltertableConfig.defaultEnvironment,
+        environment: String,
         trackingConsent: TrackingConsentState = AltertableConfig.defaultTrackingConsent,
         release: String? = nil,
         onError: ((Error) -> Void)? = nil,
@@ -132,19 +127,21 @@ public struct AltertableConfig {
         flushIntervalMs: Int = AltertableConfig.defaultFlushIntervalMs,
         maxBatchSize: Int = AltertableConfig.defaultMaxBatchSize
     ) {
-        self.mode = mode
-        self.baseURL = baseURL
+        self.init(
+            mode: mode,
+            baseURL: baseURL,
+            trackingConsent: trackingConsent,
+            release: release,
+            onError: onError,
+            debug: debug,
+            requestTimeout: requestTimeout,
+            flushOnBackground: flushOnBackground,
+            captureScreenViews: captureScreenViews,
+            flushEventThreshold: flushEventThreshold,
+            flushIntervalMs: flushIntervalMs,
+            maxBatchSize: maxBatchSize
+        )
         self.environment = environment
-        self.trackingConsent = trackingConsent
-        self.release = release
-        self.onError = onError
-        self.debug = debug
-        self.requestTimeout = requestTimeout
-        self.flushOnBackground = flushOnBackground
-        self.captureScreenViews = captureScreenViews
-        self.flushEventThreshold = flushEventThreshold
-        self.flushIntervalMs = flushIntervalMs
-        self.maxBatchSize = maxBatchSize
     }
 }
 
@@ -173,7 +170,8 @@ enum ConfigurationError: LocalizedError {
             return "Create a new Altertable client to change the tracking mode. " +
                 "Events and identities cannot be migrated between modes."
         case .storageMigration:
-            return "Legacy SDK state could not be migrated. Restart the app to retry; events are not collected until migration succeeds."
+            return "Altertable could not migrate stored SDK state. " +
+                "Events are not collected until migration succeeds on a later launch."
         }
     }
 }
