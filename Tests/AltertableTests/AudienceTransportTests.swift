@@ -1,5 +1,8 @@
 @testable import Altertable
 import Foundation
+#if canImport(FoundationNetworking)
+    import FoundationNetworking
+#endif
 import XCTest
 
 final class AudienceTransportTests: XCTestCase {
