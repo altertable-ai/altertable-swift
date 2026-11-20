@@ -7,7 +7,7 @@ import Foundation
 
 enum SDKConstants {
     static let libraryName = "altertable-swift"
-    static let libraryVersion = "0.1.0"
+    static let libraryVersion = "0.3.0" // x-release-please-version
 
     enum StorageKeys {
         static let deviceId = "atbl.device_id"

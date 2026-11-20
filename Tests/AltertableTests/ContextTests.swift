@@ -27,6 +27,18 @@ final class ContextTests: XCTestCase {
         XCTAssertEqual(props[SDKConstants.propertyLibVersion], .string(SDKConstants.libraryVersion))
     }
 
+    func testLibVersionMatchesReleaseManifest() throws {
+        let packageRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let manifestURL = packageRoot.appendingPathComponent(".release-please-manifest.json")
+        let manifest = try JSONDecoder().decode([String: String].self, from: Data(contentsOf: manifestURL))
+        let version = try XCTUnwrap(manifest["."])
+        let props = Context.getSystemProperties()
+        XCTAssertEqual(props[SDKConstants.propertyLibVersion], .string(version))
+    }
+
     func testManufacturerIsApple() {
         XCTAssertEqual(Context.deviceManufacturer, "Apple")
     }
