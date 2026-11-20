@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1](https://github.com/altertable-ai/altertable-swift/compare/altertable-swift-v0.3.0...altertable-swift-v0.3.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* synchronize reported SDK version with releases ([#45](https://github.com/altertable-ai/altertable-swift/issues/45)) ([4378661](https://github.com/altertable-ai/altertable-swift/commit/4378661c07ee52b42712b63c74b4bd575a95eb7a))
+
 ## [Unreleased]
 
 ### Fixed
